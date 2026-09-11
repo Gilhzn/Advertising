@@ -1,0 +1,23 @@
+{
+  "id": "saas-he",
+  "name": "חשבונית קלה",
+  "description": "תוכנת B2B לניהול הצעות מחיר וחוזי לקוחות עבור עסקים קטנים בישראל. מתחברת לחשבון הבנק, מפיקה דוחות מע\"מ ושולחת תזכורות תשלום אוטומטיות. תקופת ניסיון של 14 יום, לאחר מכן 99 ש\"ח לחודש.",
+  "category": "saas",
+  "languages": ["he", "en"],
+  "primaryLanguage": "he",
+  "websiteUrl": "https://example.com/hashbonit-kala",
+  "targetRegion": "Israel",
+  "connected": ["linkedin", "bluesky", "facebook"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "linkedin", "priority": "core" },
+      { "platform": "facebook", "priority": "core" },
+      { "platform": "bluesky", "priority": "secondary" }
+    ],
+    "communities": [{ "platform": "facebook", "name": "Israeli Small Business Owners" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "linkedin",
+  "productAnalytics": true
+}

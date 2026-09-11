@@ -15,7 +15,11 @@ export const JOBS = {
     days: z.number().int().min(1).max(30).default(7),
     platforms: z.array(z.string()).optional(),
   }),
-  publish_post: z.object({ postId: z.string().uuid() }),
+  publish_post: z.object({
+    postId: z.string().uuid(),
+    /** set by publish_due_posts, which already flipped the row to `publishing` (its atomic claim) */
+    claimedBy: z.enum(["scheduler"]).optional(),
+  }),
   publish_due_posts: z.object({}),
   fetch_insights: z.object({ businessId: z.string().uuid().optional() }),
   sync_product_analytics: z.object({ businessId: z.string().uuid().optional() }),

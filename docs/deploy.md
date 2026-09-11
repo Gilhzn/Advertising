@@ -189,3 +189,48 @@ curl localhost:3001/health
 ```
 
 Or without Docker, from the repo root: `pnpm -F @adv/worker build && pnpm -F @adv/worker start`.
+
+## Verification
+
+Run these locally before every deploy (same commands CI runs on push/PR, per `.github/workflows/ci.yml`
+- `pnpm eval` and `pnpm -F @adv/web build` run there too; Playwright does not, see below). Needs
+`docker compose up -d postgres` (or any reachable Postgres 16+) and `DATABASE_URL` /
+`TOKEN_ENCRYPTION_KEY` / `APP_URL` set - the values in `.env.example` work for a local run.
+
+```
+pnpm install
+pnpm db:migrate
+pnpm lint                     # Biome, whole repo
+pnpm typecheck                # tsc --noEmit, every package/app
+pnpm test                     # Vitest, every package/app (needs the local Postgres)
+pnpm eval                     # @adv/agents mock-mode evals against packages/agents/evals/cases/*.json
+pnpm -F @adv/web build        # Next.js production build - catches build-time errors typecheck can miss
+pnpm -F @adv/web e2e          # Playwright - not run in CI (needs browser binaries); run before
+                               #   shipping anything touching the wizard, calendar/approvals, or OAuth
+```
+
+`pnpm test` includes `apps/worker/src/e2e-chain.test.ts`, which drives the real
+`publish_due_posts -> publish_post -> fetch_insights` chain end to end against the local DB with a fake
+connector (no real platform account needed) - this is the fastest local check that a scheduled post can
+still make it all the way to `published` with metrics flowing back in.
+
+### Post-deploy smoke test
+
+Run after every deploy to `worker`/`web`, in order:
+
+1. **Health endpoints**: `curl <worker-url>/health` and `curl <web-url>/api/health` (if present) - expect
+   `{ "ok": true, "db": true, "boss": true }` from the worker. A `503` or connection failure means the DB
+   or pg-boss did not come up; check the boot logs before doing anything else.
+2. **Seed business discovery**: create (or reuse) one test business through the wizard and confirm
+   `discover_business` produced a brand kit and an approved-pending channel plan (`brand_kits` /
+   `channel_plans` rows, or the dashboard's onboarding screen showing them) - this exercises the
+   Claude/Agent SDK path end to end against real credentials, which nothing in CI does.
+3. **A Bluesky test post**: connect a real (or throwaway) Bluesky account via the wizard (needs no app
+   credentials, only an app password), schedule one post a minute out, and watch it flip
+   `scheduled -> publishing -> published` in the dashboard or `SELECT status FROM posts WHERE id = ...` -
+   confirms `publish_due_posts`/`publish_post` and the Bluesky connector work against the real API, not
+   just the fake connector in `e2e-chain.test.ts`.
+4. **Mailbox DNS**: for a business with `businesses.domain` set, enqueue `provision_mailbox` (or trigger
+   it from the dashboard) and confirm the mailbox moves `pending_dns -> provisioning -> active` (or its
+   DNS records show as verified) - confirms the Cloudflare/Migadu credentials and `verify_mailbox_dns`'s
+   self-rescheduling are both working in this environment.

@@ -42,7 +42,8 @@ function resultRows<T>(result: unknown): T[] {
  */
 export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[]): Promise<void> {
   for (const job of jobs) {
-    const { postId } = JOBS.publish_post.parse(job.data);
+    const payload = JOBS.publish_post.parse(job.data);
+    const { postId } = payload;
     const log = logger.child({ jobId: job.id, jobName: "publish_post", postId });
     const db = getDb();
 
@@ -138,22 +139,26 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       return;
     }
 
-    // Atomic claim. Runs on every attempt, including when this row is already `publishing`: that is
-    // only allowed once the lease has gone stale, which is what lets a crashed worker's post recover.
-    const claimed = resultRows<{ id: string }>(
-      await db.execute(sql`
-        UPDATE posts SET status = 'publishing', updated_at = now()
-        WHERE id = ${postId}
-          AND (
-            status IN ('approved', 'scheduled')
-            OR (status = 'publishing' AND updated_at < now() - interval '${sql.raw(STALE_LEASE)}')
-          )
-        RETURNING id
-      `),
-    );
-    if (claimed.length === 0) {
-      log.info("publish_post: lost the claim race (already handled elsewhere), skipping");
-      return;
+    // Atomic claim. `publish_due_posts` already performed it (the row is `publishing` and the payload
+    // says so); every other path claims here. A `publishing` row without that marker may only be taken
+    // once its lease has gone stale, which is what lets a crashed worker's post recover.
+    const preClaimedByScheduler = payload.claimedBy === "scheduler" && post.status === "publishing";
+    if (!preClaimedByScheduler) {
+      const claimed = resultRows<{ id: string }>(
+        await db.execute(sql`
+          UPDATE posts SET status = 'publishing', updated_at = now()
+          WHERE id = ${postId}
+            AND (
+              status IN ('approved', 'scheduled')
+              OR (status = 'publishing' AND updated_at < now() - interval '${sql.raw(STALE_LEASE)}')
+            )
+          RETURNING id
+        `),
+      );
+      if (claimed.length === 0) {
+        log.info("publish_post: lost the claim race (already handled elsewhere), skipping");
+        return;
+      }
     }
     /** Where the row goes back to if this attempt does not finish (so the retry can re-claim it). */
     const releaseStatus = post.status === "approved" ? "approved" : "scheduled";

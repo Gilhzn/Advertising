@@ -65,9 +65,11 @@ Loads the post fresh from the DB (never trusts stale data from the caller beyond
    transient error) unless `status` is one of `approved | scheduled | publishing`. This is the one
    place a community post's human-approval requirement (CLAUDE.md hard constraint) is enforced right
    before publish, regardless of how the job was reached.
-3. **Claim**: if not already `publishing` (i.e. this job was enqueued directly rather than via
-   `publish_due_posts`), atomically claims it itself with the same `UPDATE ... WHERE status IN (...)`
-   pattern. Loses the race silently (another worker got there first) rather than erroring.
+3. **Claim**: when the payload carries `claimedBy: "scheduler"` and the row is `publishing`, the
+   atomic claim already happened in `publish_due_posts`. Otherwise the job claims here with
+   `UPDATE ... WHERE status IN ('approved','scheduled') OR (status = 'publishing' AND updated_at older
+   than 10 minutes) RETURNING id` (the stale-lease clause recovers posts from a crashed worker). Loses
+   the race silently (another worker got there first) rather than erroring.
 2. Loads the account + decrypted tokens (`src/lib/accounts.ts`). Refuses (same terminal-failure path)
    if the account is missing or not `connected`.
 4. Refreshes the token first if `isExpiringSoon(tokens)` and `connector.refresh` exists, persisting the

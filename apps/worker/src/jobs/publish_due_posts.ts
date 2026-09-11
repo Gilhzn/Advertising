@@ -33,7 +33,7 @@ export async function handlePublishDuePosts(jobs: Job<JobPayload<"publish_due_po
     log.info({ claimed: claimed.length }, "publish_due_posts: claimed posts");
 
     for (const row of claimed) {
-      await enqueue("publish_post", { postId: row.id }, { singletonKey: row.id });
+      await enqueue("publish_post", { postId: row.id, claimedBy: "scheduler" }, { singletonKey: row.id });
     }
   }
 }

@@ -14,8 +14,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U adv" --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgres://adv:adv@localhost:5432/adv
-      TOKEN_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      DATABASE_URL: "postgres://adv:adv@localhost:5432/adv"
+      # Quoted: an unquoted all-digit-looking hex string is parsed as a YAML number (leading zeros
+      # collapse to "0"), which fails @adv/shared's "must be a 64-char hex string" check at runtime.
+      TOKEN_ENCRYPTION_KEY: "6f1d2c3b4a5968778695a4b3c2d1e0f0123456789abcdef0123456789abcdef0"
+      APP_URL: "http://localhost:3000"
+      AUTH_SECRET: "ci"
+      ENABLE_DEV_LOGIN: "1"
+      NODE_ENV: "test"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -26,3 +32,9 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm eval
+      - run: pnpm -F @adv/web build
+      # Playwright E2E is intentionally not run in CI yet: it needs browser binaries
+      # (`playwright install --with-deps`) that would slow down every PR run considerably, and the
+      # suite is still stabilizing. Run it locally with `pnpm -F @adv/web e2e` before shipping
+      # anything that touches the wizard, calendar/approvals, or OAuth connect flows.
