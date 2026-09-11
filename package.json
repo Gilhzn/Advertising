@@ -1,0 +1,28 @@
+{
+  "name": "advertising",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-driven multi-platform promotion engine: strategy, profiles, publishing, analytics and a learning loop.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "eval": "pnpm --filter @adv/agents eval",
+    "db:generate": "pnpm --filter @adv/db generate",
+    "db:migrate": "pnpm --filter @adv/db migrate",
+    "db:seed": "pnpm --filter @adv/db seed",
+    "db:studio": "pnpm --filter @adv/db studio"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.0",
+    "turbo": "^2.10.12",
+    "typescript": "^5.9.0"
+  }
+}
