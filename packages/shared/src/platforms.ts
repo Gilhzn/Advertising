@@ -189,7 +189,7 @@ export const PLATFORMS: Record<PlatformId, PlatformMeta> = {
     label: "YouTube Shorts",
     wave: 2,
     worksWithoutReview: false,
-    caveat: "Uploads are private until the compliance audit. 1,600 quota units per upload (~6/day).",
+    caveat: "Uploads are private until the compliance audit passes (2-4 weeks). Upload quota: 100 videos/day per project since June 2026.",
     maxChars: 5000,
     supports: {
       text: false,
