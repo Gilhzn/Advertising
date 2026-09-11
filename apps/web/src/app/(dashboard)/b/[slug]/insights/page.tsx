@@ -1,6 +1,9 @@
 import { Lightbulb } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { OpenPrButton } from "@/components/insights/open-pr-button";
 import { RecommendationActions } from "@/components/insights/recommendation-actions";
+import { InsightsRunButtons } from "@/components/insights/run-buttons";
+import { WeightsBars } from "@/components/insights/weights-bars";
 import { PageHeader } from "@/components/page-header";
 import { RecommendationStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +27,7 @@ export default async function InsightsPage({ params }: { params: Promise<{ slug:
       <PageHeader
         title="Insights"
         description="What the analyst learned, and what it recommends doing next."
+        actions={<InsightsRunButtons businessId={business.id} slug={slug} />}
       />
 
       {insights.length === 0 && recommendations.length === 0 ? (
@@ -34,6 +38,20 @@ export default async function InsightsPage({ params }: { params: Promise<{ slug:
         />
       ) : (
         <div className="flex flex-col gap-4">
+          {business.weights ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Learned weights</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  0-2 multipliers the content engine applies; 1.0 is unchanged.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <WeightsBars weights={business.weights} />
+              </CardContent>
+            </Card>
+          ) : null}
+
           {recommendations.length > 0 ? (
             <Card>
               <CardHeader>
@@ -64,7 +82,15 @@ export default async function InsightsPage({ params }: { params: Promise<{ slug:
                             </a>
                           ) : null}
                         </div>
-                        <RecommendationActions id={r.id} status={r.status} />
+                        <div className="flex items-center gap-2">
+                          {r.type === "product" &&
+                          r.status === "accepted" &&
+                          business.appRepoUrl &&
+                          !r.prUrl ? (
+                            <OpenPrButton businessId={business.id} slug={slug} recommendationId={r.id} />
+                          ) : null}
+                          <RecommendationActions id={r.id} status={r.status} />
+                        </div>
                       </div>
                     </li>
                   ))}

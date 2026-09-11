@@ -2,6 +2,7 @@ import { CheckCircle2, CircleDollarSign, Inbox, Rocket, Sparkles } from "lucide-
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { ScheduleStrip } from "@/components/schedule-strip";
 import { RecommendationStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { countConnected } from "@/lib/data/accounts";
 import { monthlyAiSpend } from "@/lib/data/agent-runs";
 import { getBusinessBySlug } from "@/lib/data/businesses";
 import { listRecommendations } from "@/lib/data/insights";
-import { countAwaitingApproval, countPostsByStatus } from "@/lib/data/posts";
+import { countAwaitingApproval, countPostsByStatus, scheduledCountsByDay } from "@/lib/data/posts";
 import { getLatestBrandKit, getLatestChannelPlan } from "@/lib/data/strategy";
 import { requireUser } from "@/lib/session";
 import { formatUsd } from "@/lib/utils";
@@ -23,17 +24,27 @@ export default async function BusinessOverviewPage({ params }: { params: Promise
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [brandKit, channelPlan, accounts, awaiting, scheduled, published, spend, recommendations] =
-    await Promise.all([
-      getLatestBrandKit(business.id),
-      getLatestChannelPlan(business.id),
-      countConnected(business.id),
-      countAwaitingApproval(business.id),
-      countPostsByStatus(business.id, ["scheduled", "approved"]),
-      countPostsByStatus(business.id, ["published"]),
-      monthlyAiSpend(business.id, monthStart),
-      listRecommendations(business.id, 5),
-    ]);
+  const [
+    brandKit,
+    channelPlan,
+    accounts,
+    awaiting,
+    scheduled,
+    published,
+    spend,
+    recommendations,
+    scheduledDays,
+  ] = await Promise.all([
+    getLatestBrandKit(business.id),
+    getLatestChannelPlan(business.id),
+    countConnected(business.id),
+    countAwaitingApproval(business.id),
+    countPostsByStatus(business.id, ["scheduled", "approved"]),
+    countPostsByStatus(business.id, ["published"]),
+    monthlyAiSpend(business.id, monthStart),
+    listRecommendations(business.id, 5),
+    scheduledCountsByDay([business.id], 7),
+  ]);
 
   const strategyReady = Boolean(channelPlan);
 
@@ -66,6 +77,10 @@ export default async function BusinessOverviewPage({ params }: { params: Promise
           value={String(awaiting)}
           href={`/b/${slug}/content`}
         />
+      </div>
+
+      <div className="mt-4">
+        <ScheduleStrip days={scheduledDays} />
       </div>
 
       <Card className="mt-4">

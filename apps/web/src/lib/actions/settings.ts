@@ -18,6 +18,7 @@ const UpdateSettingsSchema = z.object({
     .optional()
     .or(z.literal("")),
   aiMonthlyBudgetUsd: z.coerce.number().min(0).max(100000),
+  appRepoUrl: z.string().url().optional().or(z.literal("")),
 });
 
 export type UpdateSettingsState = { error?: string; ok?: boolean } | undefined;
@@ -38,6 +39,7 @@ export async function updateBusinessSettingsAction(
     timezone: formData.get("timezone"),
     domain: formData.get("domain") ?? "",
     aiMonthlyBudgetUsd: formData.get("aiMonthlyBudgetUsd"),
+    appRepoUrl: formData.get("appRepoUrl") ?? "",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join(", ") };
@@ -53,6 +55,7 @@ export async function updateBusinessSettingsAction(
       timezone: input.timezone,
       domain: input.domain || null,
       aiMonthlyBudgetUsd: String(input.aiMonthlyBudgetUsd),
+      appRepoUrl: input.appRepoUrl || null,
     })
     .where(eq(businesses.id, businessId));
 

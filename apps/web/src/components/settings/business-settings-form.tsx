@@ -90,6 +90,22 @@ export function BusinessSettingsForm({ business, slug }: { business: Business; s
         <Input id="domain" name="domain" defaultValue={business.domain ?? ""} placeholder="example.com" />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="appRepoUrl">App repo URL</Label>
+        <Input
+          id="appRepoUrl"
+          name="appRepoUrl"
+          type="url"
+          defaultValue={business.appRepoUrl ?? ""}
+          placeholder="https://github.com/you/your-app"
+        />
+        <p className="text-xs text-muted-foreground">
+          Needed for the app-improvement agent to open pull requests with accepted product recommendations.
+          Requires <code className="text-xs">GITHUB_TOKEN</code> to be configured on the server — the agent
+          only ever opens PRs, it never pushes directly to your repo.
+        </p>
+      </div>
+
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Saving…" : "Save settings"}
       </Button>

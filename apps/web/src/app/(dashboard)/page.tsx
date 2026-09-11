@@ -2,13 +2,14 @@ import { Building2, CheckCircle2, Inbox, Plus } from "lucide-react";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { ScheduleStrip } from "@/components/schedule-strip";
 import { AgentRunStatusBadge, PostStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listRecentRunsForBusinesses } from "@/lib/data/agent-runs";
 import { listBusinesses } from "@/lib/data/businesses";
-import { listAwaitingApproval } from "@/lib/data/posts";
+import { listAwaitingApproval, scheduledCountsByDay } from "@/lib/data/posts";
 import { requireUser } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
 
@@ -18,9 +19,10 @@ export default async function OverviewPage() {
   const businessById = new Map(businesses.map((b) => [b.id, b]));
   const businessIds = businesses.map((b) => b.id);
 
-  const [awaiting, recentRuns] = await Promise.all([
+  const [awaiting, recentRuns, scheduledDays] = await Promise.all([
     listAwaitingApproval(businessIds, 10),
     listRecentRunsForBusinesses(businessIds, 10),
+    scheduledCountsByDay(businessIds, 7),
   ]);
 
   return (
@@ -37,6 +39,10 @@ export default async function OverviewPage() {
           </Button>
         }
       />
+
+      <div className="mb-4">
+        <ScheduleStrip days={scheduledDays} />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

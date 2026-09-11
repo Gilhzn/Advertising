@@ -19,6 +19,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { BusinessSwitcher } from "@/components/business-switcher";
 import { LangToggle } from "@/components/lang-toggle";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/lib/actions/auth";
 import type { Business } from "@/lib/data/businesses";
@@ -29,24 +30,33 @@ export function AppShell({
   businesses,
   lang,
   userEmail,
+  awaitingApprovalByBusiness,
   children,
 }: {
   businesses: Pick<Business, "id" | "name" | "slug">[];
   lang: UiLang;
   userEmail?: string | null;
+  awaitingApprovalByBusiness?: Record<string, number>;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const match = pathname.match(/^\/b\/([^/]+)/);
   const activeSlug = match?.[1];
+  const activeBusiness = businesses.find((b) => b.slug === activeSlug);
+  const awaitingCount = activeBusiness ? (awaitingApprovalByBusiness?.[activeBusiness.id] ?? 0) : 0;
 
   const businessNav = activeSlug
     ? [
         { href: `/b/${activeSlug}`, label: t("nav_overview", lang), icon: Home },
         { href: `/b/${activeSlug}/strategy`, label: t("nav_strategy", lang), icon: Sparkles },
         { href: `/b/${activeSlug}/setup`, label: t("nav_setup", lang), icon: Wand2 },
-        { href: `/b/${activeSlug}/content`, label: t("nav_content", lang), icon: Inbox },
+        {
+          href: `/b/${activeSlug}/content`,
+          label: t("nav_content", lang),
+          icon: Inbox,
+          badge: awaitingCount,
+        },
         { href: `/b/${activeSlug}/platforms`, label: t("nav_platforms", lang), icon: Rocket },
         { href: `/b/${activeSlug}/analytics`, label: t("nav_analytics", lang), icon: BarChart3 },
         { href: `/b/${activeSlug}/product`, label: t("nav_product", lang), icon: LayoutGrid },
@@ -83,7 +93,12 @@ export function AppShell({
               )}
             >
               <item.icon className="size-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {"badge" in item && item.badge ? (
+                <Badge variant="warning" className="rounded-full px-1.5">
+                  {item.badge}
+                </Badge>
+              ) : null}
             </Link>
           ))}
         </>

@@ -48,6 +48,45 @@ export async function listAwaitingApproval(businessIds: string[], limit = 20): P
     .limit(limit);
 }
 
+export interface ScheduledDayCount {
+  day: string;
+  count: number;
+}
+
+/** Counts of scheduled/approved posts due each of the next `days` days (UTC calendar days), for a mini calendar strip. */
+export async function scheduledCountsByDay(businessIds: string[], days = 7): Promise<ScheduledDayCount[]> {
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const result: ScheduledDayCount[] = Array.from({ length: days }, (_, i) => {
+    const d = new Date(todayStart.getTime() + i * 24 * 60 * 60 * 1000);
+    return { day: d.toISOString().slice(0, 10), count: 0 };
+  });
+  if (businessIds.length === 0) return result;
+
+  const db = getDb();
+  const windowEnd = new Date(todayStart.getTime() + days * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({ scheduledAt: posts.scheduledAt })
+    .from(posts)
+    .where(
+      and(
+        inArray(posts.businessId, businessIds),
+        inArray(posts.status, ["scheduled", "approved"]),
+        // scheduledAt is nullable in the type but required for these statuses in practice
+      ),
+    );
+
+  const byDay = new Map(result.map((r) => [r.day, r]));
+  for (const row of rows) {
+    if (!row.scheduledAt) continue;
+    if (row.scheduledAt < todayStart || row.scheduledAt >= windowEnd) continue;
+    const key = row.scheduledAt.toISOString().slice(0, 10);
+    const slot = byDay.get(key);
+    if (slot) slot.count += 1;
+  }
+  return result;
+}
+
 export async function countPostsByStatus(businessId: string, statuses: PostStatus[]): Promise<number> {
   const db = getDb();
   const rows = await db

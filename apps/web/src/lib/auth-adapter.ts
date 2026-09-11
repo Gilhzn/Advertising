@@ -1,23 +1,15 @@
-import { eq, getDb, users } from "@adv/db";
-import type { Adapter, AdapterUser, VerificationToken } from "next-auth/adapters";
+import { and, eq, getDb, users, verificationTokens } from "@adv/db";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
 
 /**
- * Minimal Auth.js adapter backed by the existing `users` table only.
+ * Minimal Auth.js adapter backed by the `users` and `verification_tokens` tables.
  *
- * The schema has no `accounts` / `sessions` / `verification_tokens` tables
- * (see the report for the requested migration), so:
+ * The schema has no `accounts` / `sessions` tables, so:
  *  - sessions always use the JWT strategy (no createSession/getSessionAndUser needed),
- *  - there is no OAuth/webauthn sign-in provider (no linkAccount/getUserByAccount needed),
- *  - magic-link verification tokens are kept in a process-local Map. That is fine for a
- *    single dev server but does NOT survive a restart or work across multiple instances -
- *    a real `verification_tokens` table is the schema change to make before using Resend
- *    login in a multi-instance deployment.
+ *  - there is no OAuth/webauthn sign-in provider (no linkAccount/getUserByAccount needed).
+ * Magic-link verification tokens are persisted in `verification_tokens`, so they survive a
+ * restart and work across multiple instances (unlike the previous process-local Map).
  */
-const verificationTokens = new Map<string, VerificationToken>();
-
-function tokenKey(identifier: string, token: string) {
-  return `${identifier}:${token}`;
-}
 
 function toAdapterUser(row: typeof users.$inferSelect): AdapterUser {
   return {
@@ -87,14 +79,34 @@ export function buildAdapter(): Adapter {
       return undefined;
     },
     async createVerificationToken(token) {
-      verificationTokens.set(tokenKey(token.identifier, token.token), token);
+      await db.insert(verificationTokens).values({
+        identifier: token.identifier,
+        token: token.token,
+        expires: token.expires,
+      });
       return token;
     },
     async useVerificationToken(params) {
-      const key = tokenKey(params.identifier, params.token);
-      const token = verificationTokens.get(key);
-      verificationTokens.delete(key);
-      return token ?? null;
+      const [row] = await db
+        .select()
+        .from(verificationTokens)
+        .where(
+          and(
+            eq(verificationTokens.identifier, params.identifier),
+            eq(verificationTokens.token, params.token),
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
+      await db
+        .delete(verificationTokens)
+        .where(
+          and(
+            eq(verificationTokens.identifier, params.identifier),
+            eq(verificationTokens.token, params.token),
+          ),
+        );
+      return row;
     },
   };
 }

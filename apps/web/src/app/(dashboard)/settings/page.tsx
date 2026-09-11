@@ -1,6 +1,9 @@
 import { Check, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { AiCostSection } from "@/components/settings/ai-cost-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { spendByJobAgentForBusinesses } from "@/lib/data/agent-runs";
+import { listBusinesses } from "@/lib/data/businesses";
 import { requireUser } from "@/lib/session";
 
 const INTEGRATIONS: Array<{ group: string; items: Array<{ label: string; env: string[] }> }> = [
@@ -52,7 +55,18 @@ const INTEGRATIONS: Array<{ group: string; items: Array<{ label: string; env: st
 ];
 
 export default async function AppSettingsPage() {
-  await requireUser();
+  const user = await requireUser();
+  const businesses = await listBusinesses(user.id);
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const rows = await spendByJobAgentForBusinesses(
+    businesses.map((b) => b.id),
+    monthStart,
+  );
+  const totalSpend = rows.reduce((sum, r) => sum + r.costUsd, 0);
+  const totalBudget = businesses.reduce((sum, b) => sum + Number.parseFloat(b.aiMonthlyBudgetUsd), 0);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -60,6 +74,11 @@ export default async function AppSettingsPage() {
         title="App settings"
         description="Which integrations are configured on this server. Values are never shown here."
       />
+
+      <div className="mb-4">
+        <AiCostSection rows={rows} totalSpend={totalSpend} budget={totalBudget} />
+      </div>
+
       <div className="flex flex-col gap-4">
         {INTEGRATIONS.map((group) => (
           <Card key={group.group}>

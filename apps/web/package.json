@@ -12,8 +12,10 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@adv/analytics": "workspace:*",
     "@adv/connectors": "workspace:*",
     "@adv/db": "workspace:*",
+    "@adv/email": "workspace:*",
     "@adv/jobs": "workspace:*",
     "@adv/shared": "workspace:*",
     "@auth/drizzle-adapter": "^1.11.3",
