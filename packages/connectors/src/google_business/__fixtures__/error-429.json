@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": 429,
+    "message": "Quota exceeded for quota metric 'Requests' of service 'mybusiness.googleapis.com'.",
+    "status": "RESOURCE_EXHAUSTED",
+    "errors": [{ "message": "Quota exceeded.", "domain": "usageLimits", "reason": "rateLimitExceeded" }]
+  }
+}

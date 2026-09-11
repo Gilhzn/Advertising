@@ -145,7 +145,9 @@ publishing starts 400-ing.
 
 ---
 
-## Wave 2 (not implemented yet — recorded so the plan stays honest)
+## Wave 2 — summary
+
+(Implemented 2026-09-11. The detailed section is further down; this table is the one-line version.)
 
 | Platform | Gate | What works before it |
 | --- | --- | --- |
@@ -183,3 +185,211 @@ Already in `.env.example`: `META_APP_ID`, `META_APP_SECRET`, `LINKEDIN_CLIENT_ID
    deprecations are already in effect.
 4. Put `LINKEDIN_API_VERSION` and `META_GRAPH_VERSION` on a quarterly review reminder.
 5. Nothing to do for Bluesky, Telegram or Discord.
+
+---
+
+# Wave 2 — detail
+
+Compiled 2026-09-11 while building `packages/connectors` wave 2 (X, Reddit, TikTok, YouTube,
+Pinterest, Google Business Profile), the four assisted platforms and the optional Late aggregator.
+Per-platform API details and their sources are in `packages/connectors/src/<platform>/NOTES.md`.
+
+> **Source confidence.** Most vendor developer portals are blocked from this build environment
+> (`developer.x.com`, `docs.x.com`, `reddit.com/dev/api`, `developers.tiktok.com`,
+> `developers.pinterest.com`, `developers.google.com`, `getlate.dev`). Where a **primary artefact**
+> was reachable it was used and is named below: X's own sample code and SDK schemas, PRAW, Pinterest's
+> own quickstart, and Google's machine-readable discovery documents. Two things could not be verified
+> at all and are flagged: the **v4 Google local-posts body** and **everything about Late**.
+
+## Summary — what each wave-2 platform needs
+
+| Platform | Gate for third parties | Works before it | Lead time | Cost |
+| --- | --- | --- | --- | --- |
+| X (Twitter) | **No review.** Needs a developer account, an app with OAuth 2.0 user auth, and **a payment method** | Everything, once billing is attached | hours | **$0.015/post, $0.20 if it contains a link** |
+| Reddit | New API apps need **manual approval**; commercial use needs a Reddit **agreement** (~$0.24/1k calls reported) | Nothing until the app is approved | days–weeks | free below 100 QPM for non-commercial use |
+| TikTok | **Content Posting API audit** (demo video + published privacy policy) | `SELF_ONLY` (private) posts, max 5 users | 2–4 weeks | free |
+| YouTube | **API compliance audit** | Private uploads only | 2–4 weeks | free within quota |
+| Pinterest | **Standard access review** (needs a screen recording of the app calling the API) | Sandbox only — pins visible to their creator | weeks | free |
+| Google Business Profile | **GBP API access request** — a new project has **0 QPM** | **Nothing at all** | days–weeks | free |
+| Product Hunt / Hacker News / itch.io / Steam | No posting API exists | Assisted mode only | — | Steam: **$100 Direct fee/app** |
+| Late (getlate.dev) | None from us — a paid third-party subscription the customer holds | — | — | Late's plan pricing |
+
+## Sandbox / private behaviour, per connector
+
+What the connector actually does before the gate clears — this is the part the wizard and the
+publisher have to agree on.
+
+| Connector | `capabilities` flag | Behaviour before approval |
+| --- | --- | --- |
+| `tiktok` | `privateUntilReview: true` | `resolvePrivacyLevel()` **forces `SELF_ONLY`** unless `config.audited === true`, whatever `config.privacyLevel` says. `PublishResult.visibility: "private"`. `verify()` returns a `warning`. |
+| `youtube` | `privateUntilReview: true` | `status.privacyStatus: "private"` unless `config.audited === true`. `verify()` returns a `warning`. |
+| `pinterest` | `privateUntilReview: true` | `config.sandbox === true` swaps **every** call to `api-sandbox.pinterest.com` and reports `visibility: "private"`. |
+| `google_business` | `privateUntilReview: true` | Nothing publishes at all; the zero-quota 403 (`accessNotConfigured`) is mapped to `not_configured` with that explanation rather than a generic rejection. |
+| `x` | — | No gate. `capabilities.costPerPostUsd` and `estimatedCostUsd(post)` expose the fee instead. |
+| `reddit` | — | No private mode. `publish()` refuses a post without `post.communityRef` (`ConnectorError("rejected")`), so a community post can never bypass human approval. |
+| assisted ×4 | `manualPublish: true` | No network call ever. `publish()` returns `externalId = "manual:<post id>"`, no `url`. |
+
+`config.audited` / `config.sandbox` are **operator-set flags on the account row**, flipped by hand
+once the audit or access grant actually lands. They default to "not yet approved", so the failure
+mode is a private post rather than a surprise public one.
+
+## Cost and visibility notes
+
+- **X is the only platform that charges per post.** The connector adds an optional
+  `Connector.estimatedCostUsd(post)` which splits the thread exactly the way `publish` will and
+  charges $0.20 for each part carrying the link, $0.015 for the rest — so a 6-post thread with the
+  link in the last post is **$0.275**, not $0.09. The publisher and the dashboard should show this
+  before sending, and the planner should prefer link-in-reply (one $0.20 post per thread).
+  A runaway scheduling loop on X is a real financial incident, which is why `rateLimit` is a
+  deliberately tight 25 per 15 minutes.
+- **Steam costs $100 per app** (Steam Direct, recoupable after $1,000 of adjusted gross revenue) plus
+  the 30% revenue share. Not per post, but it belongs in the plan.
+- **Reddit's commercial terms** (~$0.24 per 1,000 calls reported, enterprise entry reported at
+  ~$12,000/mo) apply to commercial use of the Data API. Our usage is borderline and **must be
+  reviewed with Reddit before the first paying customer**.
+- **Late** is a paid third-party subscription held by the customer. Posts, media URLs and the
+  platform OAuth tokens live in Late's infrastructure — the wizard says so and the caveat tells the
+  user not to route a platform through Late if that is unacceptable.
+- Everything else (TikTok, YouTube, Pinterest, Google Business, the assisted four) is free within
+  quota.
+
+## Per-platform notes
+
+### X — no review, but attach a card
+
+There is no app review for posting. The gates are a developer account, a project + app with **OAuth
+2.0 user authentication** configured (type *Web App*, with our callback URL), and a payment method.
+
+One deviation from the plan: the connector requests **`media.write` in addition to**
+`tweet.read tweet.write users.read offline.access`. X's own media sample requests it, and the v2
+media INIT call is refused without it. `offline.access` is what produces the refresh token.
+
+Verified against `xdevplatform/samples@main:python/media/media_upload_v2.py` and
+`xdevplatform/xdk-python@main` (`oauth2_auth.py`, `schemas.py`) — X's own repositories.
+The v2 chunked upload (`POST /2/media/upload`, INIT/APPEND/FINALIZE/STATUS) **is confirmed**, so no
+v1.1 `upload.json` fallback was needed.
+
+### Reddit — app approval, plus a commercial agreement question
+
+New API apps need manual approval before they work for anyone but their owner. Separately, Reddit's
+Data API terms require an agreement for **commercial** use; reported pricing is ~$0.24 per 1,000
+calls. **This is an open legal question for this product, not just a technical one.**
+
+Operational requirements the connector enforces:
+
+- `duration=permanent` on the authorize URL, or there is no refresh token.
+- HTTP Basic client credentials on the token call.
+- A descriptive `User-Agent` (`adv-engine/0.1 by <handle>`) on **every** call including the token
+  exchange — Reddit throttles and eventually blocks default user agents.
+- `post.communityRef` is mandatory; `publish` throws `rejected` without it.
+- `verify()` returns the new optional `warning` when the account is **under 30 days old**, under 50
+  comment karma, or suspended — the thresholds that get posts removed.
+
+Image posts are **not** implemented. The asset-lease flow (`/api/media/asset.json`) is verified, but
+`/api/submit` with `kind=image` returns a `websocket_url` instead of the post id — PRAW opens a
+WebSocket to learn where the post landed. Wave 2 ships self and link posts; see the connector's
+NOTES.md.
+
+### TikTok — the audit is the whole story
+
+Unaudited clients can only create `SELF_ONLY` posts, for at most 5 users. The audit takes 2–4 weeks
+and wants a demo video of the posting flow and a published privacy policy.
+
+Second requirement people miss: Direct Post uses `PULL_FROM_URL`, and TikTok will only fetch media
+from a **domain verified in the developer portal**. The media CDN hostname (our R2 public domain) has
+to be added there or every post fails with `url_ownership_unverified`.
+
+### YouTube — audit, and a quota number that changed
+
+Until the compliance audit passes, uploads are forced private by YouTube regardless of what we send.
+
+Quota, **verified as changed**: since **1 June 2026** `videos.insert` costs 1 unit against its own
+bucket capped at **100 calls/day per Cloud project** (it used to be ~1,600 units out of the 10,000/day
+pool). `PLATFORMS.youtube.caveat` in `packages/shared` still describes the old model — see the
+"Requested `PLATFORMS` changes" note at the end.
+
+Also enable the **YouTube Analytics API** alongside the Data API; `yt-analytics.readonly` is requested
+now so a later analytics addition does not need a re-consent.
+
+### Pinterest — trial access is invisible
+
+A new app gets **Trial access**, which is sandbox-only: pins and boards it creates are visible only to
+their creator, and the whole app shares 1,000 requests/day. Standard access needs a review that
+includes a **screen recording of the app performing a Pinterest API action**.
+
+The connector's `config.sandbox` switches host and marks visibility, so the product never claims a
+sandbox pin is live.
+
+### Google Business Profile — the hardest gate in wave 2
+
+A new Google Cloud project starts at **0 QPM — zero quota**. Nothing reads, nothing publishes, until
+the GBP API access request form is approved. Approval expects a **verified** profile, a real business
+website and a written use case; an approved project shows 300 QPM.
+
+Enable three APIs: My Business Account Management (v1), My Business Business Information (v1), and
+My Business (**v4**, for local posts, which never moved off the legacy surface).
+
+Two honest caveats recorded in the connector:
+
+1. The **v4 `localPosts` request body could not be machine-verified** — v4 publishes no discovery
+   document. Re-verify it against a live response at the first real connection.
+2. **Post-level insights no longer exist** through a supported API. `fetchInsights` uses the
+   **Business Profile Performance API** (`fetchMultiDailyMetricsTimeSeries`, fully verified) and
+   returns **location-level** `impressions` and `clicks` with no `externalPostId`.
+
+### Product Hunt, Hacker News, itch.io, Steam — no API, by design
+
+None of these has a posting API: Product Hunt's GraphQL API is read-only for launches, HN's Firebase
+API is read-only, itch.io's `butler` pushes builds rather than posts, and the Steamworks Web API does
+not expose announcements to third parties. The shared helper is
+`packages/connectors/src/assisted.ts`; `publish()` makes **no network call** and returns
+`externalId = "manual:<post id>"` with `visibility: "public"` and no `url`, and the worker shows
+these as *prepared for manual posting*.
+
+Timing constraints that belong in the plan rather than the connector: Product Hunt launch day starts
+**00:01 Pacific** and a product may relaunch only every ~6 months; Steam **Next Fest is one per game,
+ever**, with registration closing 7–8 weeks ahead (2026 editions: 23 Feb–2 Mar, 15–22 Jun,
+19–26 Oct).
+
+### Late (getlate.dev) — optional fallback route, unverified
+
+A generic aggregator connector (`createLateConnector(platform)`) that maps our post onto
+`POST /v1/posts`. It is **off unless `LATE_API_KEY` is set**, and then used only for accounts whose
+row says `config.via === "late"` — `resolveConnector(platform, account)` in `all.ts` does the routing.
+It is never put in the registry, because the registry has one slot per platform and registering Late
+would silently replace the first-party connector for every business on the deployment.
+
+**Everything about Late is unverified**: `getlate.dev` is blocked, and the request shape comes from a
+GitHub mirror of Late's own published skill docs. The response shape in particular is a guess (the
+connector accepts several id spellings). Treat this route as experimental until someone runs it
+against a live key.
+
+## Environment variables the wave-2 connectors read
+
+**None of these are in `.env.example` yet** (owner of that file: please add them).
+
+| Variable | Required? | Used by |
+| --- | --- | --- |
+| `X_CLIENT_ID` / `X_CLIENT_SECRET` | yes, for X | X OAuth 2.0 (PKCE, confidential client) |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | yes, for Reddit | Reddit OAuth (HTTP Basic token exchange) |
+| `REDDIT_OWNER_HANDLE` | no | fallback for the mandatory `User-Agent` when an account has no handle yet |
+| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | yes, for TikTok | Login Kit. Note: **`client_key`**, not `client_id` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | yes, for YouTube **and** Google Business | one Google OAuth client serves both connectors |
+| `PINTEREST_APP_ID` / `PINTEREST_APP_SECRET` | yes, for Pinterest | v5 OAuth (HTTP Basic token exchange) |
+| `PINTEREST_SANDBOX` | no (`true` while on Trial access) | picks the sandbox host during `exchangeCode`/`refresh`; per-account it is `config.sandbox` |
+| `LATE_API_KEY` | no | **feature flag** for the Late aggregator; unset = the route does not exist |
+
+## Action list before the first external customer (wave 2)
+
+1. **Google Business Profile** access request — longest pole, and the only platform where nothing at
+   all works before approval.
+2. **TikTok** Content Posting API audit, and verify the media CDN domain in the TikTok portal.
+3. **YouTube** compliance audit.
+4. **Pinterest** Standard access review (record the screencast while building the demo).
+5. **Reddit**: get the app approved, and get a decision on whether our use is "commercial" under
+   their Data API terms.
+6. **X**: attach billing, then put a spend alarm on it — `estimatedCostUsd` is only a forecast.
+7. Re-verify the **v4 Google local-posts body** and **the entire Late integration** against live
+   responses; both are marked unverified in their NOTES.md.
+8. Flip `config.audited` / `config.sandbox` on the affected account rows as each approval lands —
+   nothing does it automatically, on purpose.

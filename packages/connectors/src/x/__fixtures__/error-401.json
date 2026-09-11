@@ -1,0 +1,6 @@
+{
+  "title": "Unauthorized",
+  "type": "https://api.x.com/2/problems/unauthorized",
+  "detail": "Unauthorized",
+  "status": 401
+}

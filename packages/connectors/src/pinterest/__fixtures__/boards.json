@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "813024577647344201",
+      "name": "Acme Robotics - updates",
+      "description": "Product updates and behind the scenes.",
+      "privacy": "PUBLIC",
+      "pin_count": 12
+    },
+    {
+      "id": "813024577647344999",
+      "name": "Desk setups",
+      "description": "Inspiration.",
+      "privacy": "PUBLIC",
+      "pin_count": 40
+    }
+  ],
+  "bookmark": null
+}

@@ -1,0 +1,11 @@
+{
+  "accounts": [
+    {
+      "name": "accounts/106123456789012345678",
+      "accountName": "Acme Robotics",
+      "type": "LOCATION_GROUP",
+      "verificationState": "VERIFIED",
+      "vettedState": "NOT_VETTED"
+    }
+  ]
+}

@@ -105,10 +105,36 @@ export interface ConnectorCapabilities {
   insights: boolean;
   /** posts are forced private until an app review/audit passes */
   privateUntilReview?: boolean;
+  /**
+   * No publishing API at all: `publish()` only records that the post is ready
+   * and the worker shows it as "prepared for manual posting"
+   * (Product Hunt, Hacker News, itch.io, Steam).
+   */
+  manualPublish?: boolean;
+  /**
+   * Indicative API cost of a single post in USD, for the plan and the
+   * dashboard. Only X charges per post today. See `estimatedCostUsd` for the
+   * per-post figure, which can be higher (an X post with a link is $0.20).
+   */
+  costPerPostUsd?: number;
   maxChars: number;
   maxMedia: number;
   /** aspect ratios accepted for images, e.g. ["1:1","4:5","16:9","9:16"] */
   imageAspects: string[];
+}
+
+export interface VerifyResult {
+  ok: boolean;
+  handle?: string;
+  displayName?: string;
+  profileUrl?: string;
+  error?: string;
+  /**
+   * The connection works but something about the account will make publishing
+   * fail or get removed (a Reddit account younger than 30 days, an unaudited
+   * TikTok app...). Shown in the wizard as a warning box.
+   */
+  warning?: string;
 }
 
 export interface AuthorizeInput {
@@ -154,11 +180,17 @@ export interface Connector {
   ): Promise<{ tokens?: OAuthTokens; account: Partial<ConnectedAccount> }>;
 
   /** Confirms the connection still works; returns fresh identity info. */
-  verify(
-    account: ConnectedAccount,
-  ): Promise<{ ok: boolean; handle?: string; displayName?: string; profileUrl?: string; error?: string }>;
+  verify(account: ConnectedAccount): Promise<VerifyResult>;
 
   publish(account: ConnectedAccount, post: PublishablePost): Promise<PublishResult>;
+
+  /**
+   * What this post will cost in API fees, in USD. Only implemented where the
+   * platform bills per post (X: $0.015, or $0.20 when the post carries a link),
+   * so the publisher and the dashboard can show the number before sending.
+   * Undefined/absent means "free".
+   */
+  estimatedCostUsd?(post: PublishablePost): number;
 
   /** Account-level and post-level metrics since `since` (ISO). May return [] when unsupported. */
   fetchInsights(

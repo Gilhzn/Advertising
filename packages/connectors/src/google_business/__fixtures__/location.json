@@ -1,0 +1,9 @@
+{
+  "name": "locations/12345678901234567890",
+  "title": "Acme Robotics",
+  "websiteUri": "https://acme.test",
+  "metadata": {
+    "hasVoiceOfMerchant": true,
+    "mapsUri": "https://maps.google.com/maps?cid=12345678901234567890"
+  }
+}

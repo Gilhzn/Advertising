@@ -1,0 +1,11 @@
+{
+  "account": {
+    "_id": "68b1f4e20000000000000000",
+    "platform": "twitter",
+    "username": "acmerobotics",
+    "name": "Acme Robotics",
+    "profileUrl": "https://x.com/acmerobotics",
+    "status": "healthy",
+    "needsReconnection": false
+  }
+}

@@ -1,7 +1,15 @@
 import { PLATFORMS, type PlatformId } from "@adv/shared";
-import { describe, expect, it } from "vitest";
-import { registerAllConnectors, WAVE_1_CONNECTORS } from "./all.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  ALL_CONNECTORS,
+  ASSISTED_CONNECTORS,
+  registerAllConnectors,
+  resolveConnector,
+  WAVE_1_CONNECTORS,
+  WAVE_2_CONNECTORS,
+} from "./all.js";
 import { getConnector, hasConnector, listConnectors } from "./registry.js";
+import { makeAccount, makePost } from "./testing.js";
 
 const WAVE_1_IDS: PlatformId[] = [
   "bluesky",
@@ -13,28 +21,59 @@ const WAVE_1_IDS: PlatformId[] = [
   "linkedin",
 ];
 
+const WAVE_2_IDS: PlatformId[] = ["x", "reddit", "tiktok", "youtube", "pinterest", "google_business"];
+
+const ASSISTED_IDS: PlatformId[] = ["product_hunt", "hacker_news", "itch_io", "steam"];
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("registerAllConnectors", () => {
-  it("registers every wave-1 platform and is idempotent", () => {
+  it("registers every platform and is idempotent", () => {
     registerAllConnectors();
     registerAllConnectors();
-    for (const id of WAVE_1_IDS) {
+    for (const id of [...WAVE_1_IDS, ...WAVE_2_IDS, ...ASSISTED_IDS]) {
       expect(hasConnector(id)).toBe(true);
       expect(getConnector(id).id).toBe(id);
     }
-    expect(listConnectors()).toHaveLength(WAVE_1_IDS.length);
+    expect(listConnectors()).toHaveLength(Object.keys(PLATFORMS).length);
   });
 
-  it("covers exactly the platforms PLATFORMS marks as wave 1", () => {
-    const wave1FromMeta = Object.values(PLATFORMS)
-      .filter((p) => p.wave === 1)
-      .map((p) => p.id)
-      .sort();
-    expect(WAVE_1_CONNECTORS.map((c) => c.id).sort()).toEqual(wave1FromMeta);
+  it("covers exactly the platforms PLATFORMS declares, wave by wave", () => {
+    const byWave = (wave: 1 | 2 | "assisted") =>
+      Object.values(PLATFORMS)
+        .filter((p) => p.wave === wave)
+        .map((p) => p.id)
+        .sort();
+    expect(WAVE_1_CONNECTORS.map((c) => c.id).sort()).toEqual(byWave(1));
+    expect(WAVE_2_CONNECTORS.map((c) => c.id).sort()).toEqual(byWave(2));
+    expect(ASSISTED_CONNECTORS.map((c) => c.id).sort()).toEqual(byWave("assisted"));
+  });
+});
+
+describe("resolveConnector", () => {
+  it("returns the first-party connector by default", () => {
+    registerAllConnectors();
+    expect(resolveConnector("x").authKind).toBe("oauth");
+    expect(resolveConnector("x", makeAccount("x")).authKind).toBe("oauth");
+  });
+
+  it("routes via Late only when the account asks for it and the key is set", () => {
+    registerAllConnectors();
+    const viaLate = makeAccount("x", { config: { via: "late", lateAccountId: "abc" } });
+    vi.stubEnv("LATE_API_KEY", "");
+    expect(resolveConnector("x", viaLate).authKind).toBe("oauth");
+    vi.stubEnv("LATE_API_KEY", "sk_test");
+    expect(resolveConnector("x", viaLate).authKind).toBe("token");
+    // A platform Late cannot reach still uses the first-party connector.
+    const assistedViaLate = makeAccount("steam", { config: { via: "late" } });
+    expect(resolveConnector("steam", assistedViaLate).authKind).toBe("assisted");
   });
 });
 
 describe("every connector", () => {
-  for (const connector of WAVE_1_CONNECTORS) {
+  for (const connector of ALL_CONNECTORS) {
     describe(connector.id, () => {
       it("takes maxChars from PLATFORMS", () => {
         expect(connector.capabilities.maxChars).toBe(PLATFORMS[connector.id].maxChars);
@@ -54,6 +93,30 @@ describe("every connector", () => {
           expect(typeof connector.exchangeCode).toBe("function");
         } else {
           expect(typeof connector.connectWithInputs).toBe("function");
+        }
+      });
+
+      it("agrees with PLATFORMS about whether it needs a review", () => {
+        const meta = PLATFORMS[connector.id];
+        // Anything gated behind an audit must say so, so the UI can warn.
+        if (connector.capabilities.privateUntilReview) {
+          expect(meta.worksWithoutReview).toBe(false);
+        }
+        // Assisted platforms have no API at all.
+        if (connector.authKind === "assisted") {
+          expect(connector.capabilities.manualPublish).toBe(true);
+          expect(connector.capabilities.insights).toBe(false);
+          expect(meta.wave).toBe("assisted");
+        }
+      });
+
+      it("only prices posts where the platform actually charges", () => {
+        if (connector.estimatedCostUsd) {
+          const cost = connector.estimatedCostUsd(makePost(connector.id));
+          expect(cost).toBeGreaterThan(0);
+          expect(PLATFORMS[connector.id].costPerPostUsd).toBeGreaterThan(0);
+        } else {
+          expect(connector.capabilities.costPerPostUsd).toBeUndefined();
         }
       });
 

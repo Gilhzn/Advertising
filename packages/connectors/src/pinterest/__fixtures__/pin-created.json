@@ -1,0 +1,11 @@
+{
+  "id": "813024508928217094",
+  "created_at": "2026-09-11T16:20:31",
+  "link": "https://acme.test/launch",
+  "title": "Tiny robots that tidy your desk",
+  "description": "Tiny robots that tidy your desk. Ships next week.",
+  "alt_text": "A tiny robot on a desk",
+  "board_id": "813024577647344201",
+  "board_owner": { "username": "acmerobotics" },
+  "media": { "media_type": "image" }
+}

@@ -1,0 +1,24 @@
+{
+  "kind": "Listing",
+  "data": {
+    "after": null,
+    "dist": 1,
+    "children": [
+      {
+        "kind": "t3",
+        "data": {
+          "subreddit": "SideProject",
+          "id": "1nd7k2x",
+          "name": "t3_1nd7k2x",
+          "title": "We cut onboarding from 9 screens to 2",
+          "score": 284,
+          "ups": 284,
+          "upvote_ratio": 0.94,
+          "num_comments": 47,
+          "permalink": "/r/SideProject/comments/1nd7k2x/we_cut_onboarding_from_9_screens_to_2/"
+        }
+      }
+    ],
+    "before": null
+  }
+}

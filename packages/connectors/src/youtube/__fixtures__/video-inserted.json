@@ -1,0 +1,15 @@
+{
+  "kind": "youtube#video",
+  "id": "dQw4w9WgXcQ",
+  "snippet": {
+    "channelId": "UCq3lRcRkFkBtQ5bnLzPa0Rw",
+    "title": "Tiny robots that tidy your desk #Shorts",
+    "description": "Tiny robots that tidy your desk. Ships next week.",
+    "tags": ["robots", "launch"]
+  },
+  "status": {
+    "uploadStatus": "uploaded",
+    "privacyStatus": "private",
+    "selfDeclaredMadeForKids": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "id": "1866432118754529361",
+      "public_metrics": {
+        "impression_count": 15320,
+        "like_count": 212,
+        "reply_count": 18,
+        "repost_count": 44,
+        "quote_count": 6,
+        "bookmark_count": 31
+      },
+      "non_public_metrics": {
+        "impression_count": 15411,
+        "url_link_clicks": 268,
+        "user_profile_clicks": 97
+      }
+    }
+  ]
+}

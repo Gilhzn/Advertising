@@ -1,0 +1,9 @@
+{
+  "account": {
+    "_id": "68b1f4e20000000000000000",
+    "platform": "twitter",
+    "username": "acmerobotics",
+    "status": "needs_reconnection",
+    "needsReconnection": true
+  }
+}

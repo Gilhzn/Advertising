@@ -1,0 +1,15 @@
+{
+  "data": {
+    "user": {
+      "open_id": "7101234567890123456",
+      "union_id": "c9c1f4e2-0000-4a3b-9d1b-000000000000",
+      "display_name": "Acme Robotics",
+      "username": "acmerobotics",
+      "profile_deep_link": "https://www.tiktok.com/@acmerobotics",
+      "follower_count": 12840,
+      "likes_count": 98210,
+      "video_count": 63
+    }
+  },
+  "error": { "code": "ok", "message": "", "log_id": "2026091100000000000000000000000000" }
+}

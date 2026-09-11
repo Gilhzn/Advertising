@@ -1,0 +1,8 @@
+{
+  "data": {},
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Too many requests. Please try again later.",
+    "log_id": "2026091100000000000000000000000006"
+  }
+}

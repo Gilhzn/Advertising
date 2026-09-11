@@ -1,0 +1,17 @@
+{
+  "post": {
+    "_id": "68c2a1f40000000000000001",
+    "content": "Tiny robots that tidy your desk. Ships next week.",
+    "status": "published",
+    "publishNow": true,
+    "platforms": [
+      {
+        "platform": "twitter",
+        "accountId": "68b1f4e20000000000000000",
+        "status": "published",
+        "platformPostUrl": "https://x.com/acmerobotics/status/1866432118754529361"
+      }
+    ],
+    "createdAt": "2026-09-11T16:20:31.000Z"
+  }
+}

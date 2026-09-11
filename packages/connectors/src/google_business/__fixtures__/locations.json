@@ -1,0 +1,21 @@
+{
+  "locations": [
+    {
+      "name": "locations/12345678901234567890",
+      "title": "Acme Robotics",
+      "websiteUri": "https://acme.test",
+      "storefrontAddress": {
+        "regionCode": "IL",
+        "languageCode": "en",
+        "postalCode": "6701101",
+        "locality": "Tel Aviv",
+        "addressLines": ["Rothschild Blvd 1"]
+      },
+      "metadata": {
+        "hasVoiceOfMerchant": true,
+        "mapsUri": "https://maps.google.com/maps?cid=12345678901234567890",
+        "newReviewUri": "https://search.google.com/local/writereview?placeid=abc"
+      }
+    }
+  ]
+}

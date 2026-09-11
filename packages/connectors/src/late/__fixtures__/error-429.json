@@ -1,0 +1,5 @@
+{
+  "error": "Too many requests",
+  "code": "RATE_LIMITED",
+  "details": { "limit": 60, "window": "1m" }
+}

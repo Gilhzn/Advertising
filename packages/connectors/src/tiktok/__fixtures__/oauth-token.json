@@ -1,0 +1,9 @@
+{
+  "access_token": "tiktok-access-token",
+  "expires_in": 86400,
+  "open_id": "7101234567890123456",
+  "refresh_expires_in": 31536000,
+  "refresh_token": "tiktok-refresh-token",
+  "scope": "user.info.basic,video.publish,video.upload",
+  "token_type": "Bearer"
+}

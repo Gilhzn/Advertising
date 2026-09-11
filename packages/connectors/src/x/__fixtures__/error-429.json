@@ -1,0 +1,6 @@
+{
+  "title": "Too Many Requests",
+  "type": "https://api.x.com/2/problems/usage-capped",
+  "detail": "Usage cap exceeded, retry after the reset",
+  "status": 429
+}

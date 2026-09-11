@@ -1,0 +1,17 @@
+{
+  "all": {
+    "summary_metrics": {
+      "IMPRESSION": 18420,
+      "SAVE": 312,
+      "PIN_CLICK": 940,
+      "OUTBOUND_CLICK": 221
+    },
+    "daily_metrics": [
+      {
+        "date": "2026-09-10",
+        "data_status": "READY",
+        "metrics": { "IMPRESSION": 1204, "SAVE": 22, "PIN_CLICK": 61 }
+      }
+    ]
+  }
+}

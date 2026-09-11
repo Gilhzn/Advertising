@@ -1,0 +1,11 @@
+{
+  "name": "accounts/106123456789012345678/locations/12345678901234567890/localPosts/7712345678901234567",
+  "languageCode": "en",
+  "summary": "Tiny robots that tidy your desk. Ships next week.",
+  "callToAction": { "actionType": "LEARN_MORE", "url": "https://acme.test/launch" },
+  "createTime": "2026-09-11T16:20:31.123Z",
+  "updateTime": "2026-09-11T16:20:31.123Z",
+  "state": "LIVE",
+  "topicType": "STANDARD",
+  "searchUrl": "https://search.google.com/local/posts?q=acme+robotics&ludocid=12345678901234567890"
+}

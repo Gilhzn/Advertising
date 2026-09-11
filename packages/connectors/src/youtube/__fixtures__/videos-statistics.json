@@ -1,0 +1,15 @@
+{
+  "kind": "youtube#videoListResponse",
+  "items": [
+    {
+      "kind": "youtube#video",
+      "id": "dQw4w9WgXcQ",
+      "statistics": {
+        "viewCount": "20481",
+        "likeCount": "1342",
+        "favoriteCount": "0",
+        "commentCount": "96"
+      }
+    }
+  ]
+}
