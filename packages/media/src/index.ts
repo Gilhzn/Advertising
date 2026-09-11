@@ -27,3 +27,5 @@ export async function uploadMedia(input: UploadInput): Promise<UploadOutput> {
 }
 
 export * from "./imagegen/index.js";
+
+export { activeUploadBackend, type UploadBackend } from "./upload.js";

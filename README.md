@@ -92,7 +92,7 @@ ENABLE_DEV_LOGIN=1                        # dev-only credentials login; never se
 
 Platform OAuth client ids/secrets, `ANTHROPIC_API_KEY`, PostHog and email-provider credentials are
 each optional until you actually exercise that integration - see the per-package `.env.example`
-files and `docs/deploy.md` for the full list.
+files and `docs/deploy.md (Railway, always-on) or docs/deploy-vercel.md (Vercel + Neon + GitHub Actions worker, zero servers)` for the full list.
 
 ## Onboarding flow
 

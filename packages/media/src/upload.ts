@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { put as blobPut } from "@vercel/blob";
 import type { UploadInput, UploadOutput } from "./types.js";
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -55,8 +56,40 @@ async function uploadToLocalDisk(input: UploadInput, key: string): Promise<Uploa
   return { url: `${appUrl}/uploads/${key}`, key };
 }
 
+/** Vercel Blob (public store). Enabled by the `BLOB_READ_WRITE_TOKEN` env var Vercel injects. */
+function blobEnabled(): boolean {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+async function uploadToVercelBlob(input: UploadInput, key: string): Promise<UploadOutput> {
+  const res = await blobPut(key, input.buffer, {
+    access: "public",
+    contentType: input.contentType,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: 60 * 60 * 24 * 365,
+  });
+  return { url: res.url, key };
+}
+
+/** Backend order: Cloudflare R2 → Vercel Blob → local disk (dev only; read-only on serverless hosts). */
+export type UploadBackend = "r2" | "vercel_blob" | "local";
+
+export function activeUploadBackend(): UploadBackend {
+  if (r2Client()) return "r2";
+  if (blobEnabled()) return "vercel_blob";
+  return "local";
+}
+
 export async function uploadMediaImpl(input: UploadInput): Promise<UploadOutput> {
   const key = keyFor(input);
   const client = r2Client();
-  return client ? uploadToR2(client, input, key) : uploadToLocalDisk(input, key);
+  if (client) return uploadToR2(client, input, key);
+  if (blobEnabled()) return uploadToVercelBlob(input, key);
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Uploads need a storage backend on Vercel: connect a Blob store (BLOB_READ_WRITE_TOKEN) or set the R2_* variables",
+    );
+  }
+  return uploadToLocalDisk(input, key);
 }
