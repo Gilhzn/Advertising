@@ -1,0 +1,24 @@
+{
+  "id": "game-roguelike-en",
+  "name": "Pixel Dungeon Run",
+  "description": "A fast-paced roguelike mobile game with daily dungeons, pixel art and 5-minute runs. Free with cosmetic-only purchases. Launching on iOS and Android.",
+  "category": "game",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/pixel-dungeon-run",
+  "targetRegion": "Global",
+  "connected": ["bluesky", "discord", "threads"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "bluesky", "priority": "core" },
+      { "platform": "discord", "priority": "core" },
+      { "platform": "threads", "priority": "secondary" },
+      { "platform": "itch_io", "priority": "experimental" }
+    ],
+    "communities": [{ "platform": "discord", "name": "Indie Game Devs" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "bluesky",
+  "productAnalytics": false
+}

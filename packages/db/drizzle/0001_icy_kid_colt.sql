@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "communities_business_platform_name" ON "communities" USING btree ("business_id","platform","name");

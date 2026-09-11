@@ -1,0 +1,23 @@
+{
+  "id": "game-cozy-he",
+  "name": "חווה קטנה",
+  "description": "משחק חווה נינוח לנייד בעברית, עם גידול ירקות, בעלי חיים וחברים. חינמי עם רכישות קוסמטיות בלבד. מיועד לשוק הישראלי.",
+  "category": "game",
+  "languages": ["he", "en"],
+  "primaryLanguage": "he",
+  "websiteUrl": "https://example.com/hava-ktana",
+  "targetRegion": "Israel",
+  "connected": ["instagram", "facebook", "telegram"],
+  "communityAccounts": ["telegram"],
+  "plan": {
+    "platforms": [
+      { "platform": "instagram", "priority": "core" },
+      { "platform": "facebook", "priority": "core" },
+      { "platform": "telegram", "priority": "secondary" }
+    ],
+    "communities": [{ "platform": "facebook", "name": "Israeli Mobile Gamers" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "instagram",
+  "productAnalytics": false
+}

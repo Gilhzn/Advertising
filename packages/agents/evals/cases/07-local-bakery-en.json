@@ -1,0 +1,22 @@
+{
+  "id": "local-bakery-en",
+  "name": "Flourhouse",
+  "description": "A sourdough bakery in Haifa. Open Tuesday to Saturday, 7am to 2pm. Long-fermented breads, seasonal pastries, and a weekend pre-order list. Walk-ins welcome.",
+  "category": "local_business",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/flourhouse",
+  "targetRegion": "Haifa, Israel",
+  "connected": ["instagram", "facebook"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "instagram", "priority": "core" },
+      { "platform": "facebook", "priority": "core" }
+    ],
+    "communities": [{ "platform": "facebook", "name": "Haifa Food Lovers" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "instagram",
+  "productAnalytics": false
+}

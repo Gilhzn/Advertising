@@ -1,0 +1,23 @@
+{
+  "id": "mobile-fitness-en",
+  "name": "SevenSet",
+  "description": "A strength training app that builds a 7-minute session from the equipment you actually have. Tracks progressive overload. Free tier with three programmes; 4 USD per month for the full library.",
+  "category": "mobile_app",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/sevenset",
+  "targetRegion": "US",
+  "connected": ["instagram", "threads", "facebook"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "instagram", "priority": "core" },
+      { "platform": "threads", "priority": "core" },
+      { "platform": "facebook", "priority": "secondary" }
+    ],
+    "communities": [{ "platform": "reddit", "name": "r/bodyweightfitness" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "instagram",
+  "productAnalytics": true
+}

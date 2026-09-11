@@ -158,20 +158,24 @@ export const oauthStates = pgTable("oauth_states", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const communities = pgTable("communities", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  businessId: uuid("business_id")
-    .notNull()
-    .references(() => businesses.id, { onDelete: "cascade" }),
-  platform: platformEnum("platform").notNull(),
-  name: text("name").notNull(),
-  url: text("url"),
-  audienceFit: text("audience_fit"),
-  rulesSummary: text("rules_summary"),
-  approvalRequired: boolean("approval_required").notNull().default(true),
-  lastPostedAt: timestamp("last_posted_at", { withTimezone: true }),
-  ...timestamps,
-});
+export const communities = pgTable(
+  "communities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    platform: platformEnum("platform").notNull(),
+    name: text("name").notNull(),
+    url: text("url"),
+    audienceFit: text("audience_fit"),
+    rulesSummary: text("rules_summary"),
+    approvalRequired: boolean("approval_required").notNull().default(true),
+    lastPostedAt: timestamp("last_posted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("communities_business_platform_name").on(t.businessId, t.platform, t.name)],
+);
 
 export const posts = pgTable(
   "posts",

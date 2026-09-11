@@ -1,0 +1,23 @@
+{
+  "id": "other-newsletter-en",
+  "name": "Quiet Signals",
+  "description": "A weekly newsletter that explains one infrastructure outage in plain language. Free, with a paid tier for the incident archive. Written by two SREs.",
+  "category": "other",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/quiet-signals",
+  "targetRegion": "Global",
+  "connected": ["bluesky", "linkedin"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "bluesky", "priority": "core" },
+      { "platform": "linkedin", "priority": "core" },
+      { "platform": "hacker_news", "priority": "experimental" }
+    ],
+    "communities": [{ "platform": "reddit", "name": "r/sre" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "bluesky",
+  "productAnalytics": false
+}

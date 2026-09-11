@@ -42,7 +42,7 @@ export const BrandKitSchema = z.object({
     .min(3)
     .max(8),
   tagline: z.string().max(120),
-  bios: z.record(z.enum(PLATFORM_IDS), z.object({ short: z.string(), long: z.string().optional() })),
+  bios: z.partialRecord(z.enum(PLATFORM_IDS), z.object({ short: z.string(), long: z.string().optional() })),
   palette: z.object({
     primary: z.string(),
     secondary: z.string(),

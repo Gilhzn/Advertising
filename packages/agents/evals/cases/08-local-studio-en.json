@@ -1,0 +1,23 @@
+{
+  "id": "local-studio-en",
+  "name": "Northline Pilates",
+  "description": "A six-person reformer Pilates studio in Tel Aviv. Small classes, beginner intro pack of three sessions, and physiotherapist-led rehab slots. Bookings by the hour.",
+  "category": "local_business",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/northline",
+  "targetRegion": "Tel Aviv, Israel",
+  "connected": ["instagram", "facebook", "telegram"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "instagram", "priority": "core" },
+      { "platform": "facebook", "priority": "secondary" },
+      { "platform": "telegram", "priority": "secondary" }
+    ],
+    "communities": [{ "platform": "facebook", "name": "Tel Aviv Wellness" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "facebook",
+  "productAnalytics": false
+}

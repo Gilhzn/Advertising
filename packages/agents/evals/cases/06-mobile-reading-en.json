@@ -1,0 +1,23 @@
+{
+  "id": "mobile-reading-en",
+  "name": "Margin",
+  "description": "A reading app that turns saved articles into a daily 15-minute queue and keeps your highlights searchable. Offline first. One-time purchase, no subscription.",
+  "category": "mobile_app",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/margin",
+  "targetRegion": "Global",
+  "connected": ["bluesky", "threads"],
+  "communityAccounts": ["discord"],
+  "plan": {
+    "platforms": [
+      { "platform": "bluesky", "priority": "core" },
+      { "platform": "threads", "priority": "secondary" },
+      { "platform": "discord", "priority": "secondary" }
+    ],
+    "communities": []
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "bluesky",
+  "productAnalytics": false
+}

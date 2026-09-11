@@ -1,0 +1,24 @@
+{
+  "id": "saas-devtool-en",
+  "name": "Tracewell",
+  "description": "Open-source distributed tracing for small teams. Self-host in one container or use the hosted tier. No per-seat pricing. Written in Rust.",
+  "category": "saas",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/tracewell",
+  "targetRegion": "Global",
+  "connected": ["bluesky", "discord", "linkedin"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "bluesky", "priority": "core" },
+      { "platform": "discord", "priority": "secondary" },
+      { "platform": "linkedin", "priority": "secondary" },
+      { "platform": "hacker_news", "priority": "experimental" }
+    ],
+    "communities": [{ "platform": "reddit", "name": "r/devops" }]
+  },
+  "batch": { "days": 14 },
+  "seedMetricsFor": "bluesky",
+  "productAnalytics": true
+}

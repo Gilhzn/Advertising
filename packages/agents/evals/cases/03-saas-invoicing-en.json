@@ -1,0 +1,23 @@
+{
+  "id": "saas-invoicing-en",
+  "name": "Ledgerly",
+  "description": "Invoicing and expense tracking for freelancers. Connects to your bank, produces VAT-ready reports, and chases late payers automatically. 14-day free trial, then 9 USD per month.",
+  "category": "saas",
+  "languages": ["en"],
+  "primaryLanguage": "en",
+  "websiteUrl": "https://example.com/ledgerly",
+  "targetRegion": "EU",
+  "connected": ["linkedin", "bluesky"],
+  "communityAccounts": [],
+  "plan": {
+    "platforms": [
+      { "platform": "linkedin", "priority": "core" },
+      { "platform": "bluesky", "priority": "core" },
+      { "platform": "product_hunt", "priority": "secondary" }
+    ],
+    "communities": [{ "platform": "reddit", "name": "r/freelance" }]
+  },
+  "batch": { "days": 7 },
+  "seedMetricsFor": "linkedin",
+  "productAnalytics": true
+}
