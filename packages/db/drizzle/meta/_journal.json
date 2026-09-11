@@ -15,6 +15,13 @@
       "when": 1789142550401,
       "tag": "0001_icy_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789143244415,
+      "tag": "0002_modern_havok",
+      "breakpoints": true
     }
   ]
 }

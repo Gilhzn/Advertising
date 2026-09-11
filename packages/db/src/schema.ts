@@ -56,6 +56,17 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
+/** Auth.js magic-link verification tokens (standard shape). */
+export const verificationTokens = pgTable(
+  "verification_tokens",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex("verification_tokens_identifier_token").on(t.identifier, t.token)],
+);
+
 export const businesses = pgTable(
   "businesses",
   {
@@ -129,7 +140,12 @@ export const platformAccounts = pgTable(
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     ...timestamps,
   },
-  (t) => [index("platform_accounts_business").on(t.businessId, t.platform)],
+  (t) => [
+    index("platform_accounts_business").on(t.businessId, t.platform),
+    uniqueIndex("platform_accounts_one_owned_per_platform")
+      .on(t.businessId, t.platform)
+      .where(sql`ownership = 'owned'`),
+  ],
 );
 
 export const oauthTokens = pgTable("oauth_tokens", {

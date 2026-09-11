@@ -11,5 +11,6 @@
       "style": { "noNonNullAssertion": "off" }
     }
   },
-  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" } }
+  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" } },
+  "css": { "parser": { "cssModules": true, "tailwindDirectives": true } }
 }
