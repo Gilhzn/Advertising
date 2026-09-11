@@ -1,5 +1,7 @@
 # Deploying to Railway
 
+Each app ships a `railway.json` (`apps/web/railway.json`, `apps/worker/railway.json`) pointing Railway at its Dockerfile and `/health` endpoint. Create two services from this repo, set each service's **Root Directory** to the repo root and its **Config Path** to the app's `railway.json`.
+
 Three Railway services share one Postgres instance:
 
 ```
