@@ -74,6 +74,12 @@ and exits. Posting precision is therefore ~10 minutes; switch to the always-on w
 3. **Content → Generate next 7 days** → approve posts → the worker publishes them on schedule.
 4. **Insights** runs weekly; **Product** needs the PostHog snippet in your app.
 
+## Notes
+
+- The runtime agents run through the Claude Agent SDK, which refuses to run with permission bypass as
+  the `root` user. GitHub Actions runners and the Dockerfiles in this repo already run as a non-root
+  user; if you host the worker elsewhere, run it as a regular user.
+
 ## Troubleshooting
 
 - Build fails on Vercel with a Postgres error: `DATABASE_URL` missing at build time → connect Neon first.
