@@ -15,7 +15,24 @@ import { BudgetExceededError } from "./errors.js";
 import { estimateCostUsd, MODEL_POLICY } from "./model-policy.js";
 
 /** Filesystem/shell tools are never available to runtime agents. */
-export const RUNTIME_DISALLOWED_TOOLS = ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"] as const;
+/**
+ * Runtime agents are not code agents. Deny every filesystem/shell/network built-in; the only fetch path is
+ * the SSRF-guarded mcp__engine__fetch_url tool, and the explicit `tools` allowlist constrains the rest.
+ */
+export const RUNTIME_DISALLOWED_TOOLS = [
+  "Bash",
+  "BashOutput",
+  "KillShell",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "Read",
+  "NotebookRead",
+  "Glob",
+  "Grep",
+  "WebFetch",
+] as const;
 
 export type QueryFn = (params: { prompt: string; options?: Options }) => Query;
 
@@ -191,6 +208,9 @@ export async function runAgentJob(input: RunAgentJobInput): Promise<AgentRunSumm
       agent: input.agentName,
       model,
       status: "running",
+      // provisional reservation so concurrent runs cannot all see the full remaining monthly budget;
+      // replaced by the real cost when the run finishes (success or failure)
+      costUsd: (maxBudgetUsd ?? 0).toFixed(4),
       startedAt: now(),
     })
     .returning({ id: agentRuns.id });
@@ -271,6 +291,8 @@ export async function runAgentJob(input: RunAgentJobInput): Promise<AgentRunSumm
         finishedAt: now(),
         decisionLog,
         result: { sessionId },
+        // no usage was reported before the failure; release the reservation
+        costUsd: "0",
       })
       .where(eq(agentRuns.id, runId));
     return {
@@ -293,7 +315,14 @@ export async function runAgentJob(input: RunAgentJobInput): Promise<AgentRunSumm
     const message = "query() ended without a result message";
     await db
       .update(agentRuns)
-      .set({ status: "failed", error: message, finishedAt: now(), decisionLog, result: { sessionId } })
+      .set({
+        status: "failed",
+        error: message,
+        finishedAt: now(),
+        decisionLog,
+        result: { sessionId },
+        costUsd: "0",
+      })
       .where(eq(agentRuns.id, runId));
     return {
       runId,

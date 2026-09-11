@@ -214,6 +214,9 @@ export const posts = pgTable(
     variantGroup: text("variant_group"),
     variantLabel: text("variant_label"),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    /** who approved the post (required before publishing to a community) */
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     externalId: text("external_id"),
     externalUrl: text("external_url"),
