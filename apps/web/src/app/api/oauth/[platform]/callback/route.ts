@@ -1,8 +1,38 @@
+import { timingSafeEqual } from "node:crypto";
+import { ConnectorError } from "@adv/connectors";
 import { and, businesses, eq, getDb, oauthTokens, platformAccounts } from "@adv/db";
-import { encryptSecret, PLATFORM_IDS } from "@adv/shared";
+import { encryptSecret, logger, PLATFORM_IDS, redactSecrets } from "@adv/shared";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { ensureConnectorsRegistered, getConnector, hasConnector } from "@/lib/connectors";
 import { consumeOAuthState } from "@/lib/data/oauth-state";
+import { OAUTH_STATE_COOKIE, oauthStateCookieOptions } from "@/lib/oauth-cookie";
+
+/** Must match `start`'s redirect URI byte for byte, so it comes from config, never from the request host. */
+function appUrl(): string {
+  const value = process.env.APP_URL;
+  if (!value) {
+    throw new Error("APP_URL is not set - it is required to build OAuth redirect URIs");
+  }
+  return value.replace(/\/+$/, "");
+}
+
+/** Constant-time comparison that does not leak length through an exception. */
+function statesMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Only fixed, non-sensitive codes ever reach the browser: a connector/platform error message can
+ * quote the token request it made. The detail goes to the server log instead.
+ */
+function errorCode(err: unknown): string {
+  return err instanceof ConnectorError ? err.code : "connection_failed";
+}
 
 export async function GET(req: Request, { params }: { params: Promise<{ platform: string }> }) {
   const { platform } = await params;
@@ -10,35 +40,52 @@ export async function GET(req: Request, { params }: { params: Promise<{ platform
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
+  const log = logger.child({ route: "oauth-callback", platform });
 
   if (!(PLATFORM_IDS as readonly string[]).includes(platform)) {
     return NextResponse.json({ error: "Unknown platform" }, { status: 404 });
   }
   const platformId = platform as (typeof PLATFORM_IDS)[number];
 
-  if (!state) {
-    return NextResponse.json({ error: "Missing state" }, { status: 400 });
+  // The callback is a user-initiated navigation: require the same session that started the flow.
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.redirect(new URL("/login", appUrl()));
   }
+
+  const jar = await cookies();
+  const cookieState = jar.get(OAUTH_STATE_COOKIE)?.value;
+  // Whatever happens below, this one-shot cookie is spent.
+  jar.set(OAUTH_STATE_COOKIE, "", { ...oauthStateCookieOptions(), maxAge: 0 });
+
+  if (!state || !cookieState || !statesMatch(cookieState, state)) {
+    log.warn("oauth callback: state cookie missing or mismatched");
+    return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+  }
+
   const stateRow = await consumeOAuthState(state);
-  if (!stateRow || stateRow.platform !== platformId) {
+  if (!stateRow || stateRow.platform !== platformId || stateRow.userId !== session.user.id) {
+    log.warn("oauth callback: state row missing, expired, or owned by another user");
     return NextResponse.json({ error: "Invalid or expired OAuth state" }, { status: 400 });
   }
 
-  // Resolve the business's slug (trusted: stateRow was created by an authenticated request) so we
+  // Resolve the business's slug (trusted: stateRow was created by this same authenticated user) so we
   // can redirect back to the wizard with a toast regardless of the outcome below.
   const db = getDb();
   const [business] = await db
     .select()
     .from(businesses)
-    .where(eq(businesses.id, stateRow.businessId))
+    .where(and(eq(businesses.id, stateRow.businessId), eq(businesses.userId, session.user.id)))
     .limit(1);
   if (!business) {
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
   }
-  const setupUrl = new URL(`/b/${business.slug}/setup`, url.origin);
+  const setupUrl = new URL(`/b/${business.slug}/setup`, appUrl());
 
   if (oauthError || !code) {
-    setupUrl.searchParams.set("oauthError", oauthError ?? "missing_code");
+    // The provider's own `error` param is echoed back only as a short fixed-shape code.
+    const providerCode = oauthError ? oauthError.replace(/[^a-z0-9_-]/gi, "").slice(0, 40) : "missing_code";
+    setupUrl.searchParams.set("oauthError", providerCode || "connection_failed");
     return NextResponse.redirect(setupUrl);
   }
 
@@ -54,7 +101,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ platform
   }
 
   try {
-    const redirectUri = `${process.env.APP_URL ?? url.origin}/api/oauth/${platformId}/callback`;
+    const redirectUri = `${appUrl()}/api/oauth/${platformId}/callback`;
     const { tokens, account } = await connector.exchangeCode(code, {
       businessId: stateRow.businessId,
       redirectUri,
@@ -127,7 +174,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ platform
     setupUrl.searchParams.set("connected", platformId);
     return NextResponse.redirect(setupUrl);
   } catch (err) {
-    setupUrl.searchParams.set("oauthError", err instanceof Error ? err.message : "connection_failed");
+    log.error(
+      { businessId: stateRow.businessId, error: redactSecrets(err instanceof Error ? err.message : err) },
+      "oauth callback: token exchange failed",
+    );
+    setupUrl.searchParams.set("oauthError", errorCode(err));
     return NextResponse.redirect(setupUrl);
   }
 }

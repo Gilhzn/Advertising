@@ -34,6 +34,7 @@ Rules:
 - Job = one `query()`; persist `session_id` from the `system/init` message in `agent_runs.result` to allow `resume`.
 - Read `usage` and `total_cost_usd` from the final `result` message and write them to `agent_runs`.
 - The supervisor delegates via the built-in `Agent` tool; subagents are declared in `options.agents`, not spawned manually.
+- Runtime agents get `disallowedTools` for Bash/Read/Write/Edit/Glob/Grep/WebFetch (`RUNTIME_DISALLOWED_TOOLS`); the only fetch path is `mcp__engine__fetch_url`, which is SSRF-guarded and DNS-pinned (`safe-fetch.ts`). Every direct Messages API call passes `accounting.businessId` so the monthly budget gate applies.
 - Deterministic work (publishing, ingestion, DNS) is plain code in `apps/worker/src/jobs`, not an LLM.
 - The optional app-improvement coding agent (Phase 6b) runs in a separate `query()` with `Bash/Read/Edit/Write` enabled inside a temporary clone directory with `cwd` set, and can only open a PR.
 - Docs: https://code.claude.com/docs/en/agent-sdk (verify option names against the installed version's `.d.ts` when in doubt).

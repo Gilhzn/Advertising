@@ -10,7 +10,8 @@ export default async function LoginPage({
   searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const { callbackUrl, error } = await searchParams;
-  const isDev = process.env.NODE_ENV !== "production";
+  // Mirrors the provider gate in `src/auth.ts` - the form is only rendered when the provider exists.
+  const isDev = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_LOGIN === "1";
   const resendEnabled = Boolean(process.env.RESEND_API_KEY);
 
   return (

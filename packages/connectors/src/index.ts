@@ -2,6 +2,7 @@ export * from "./all.js";
 export * from "./brand.js";
 export * from "./connector.js";
 export * from "./http.js";
+export * from "./net-guard.js";
 export * from "./oauth.js";
 export * from "./rate-limiter.js";
 export * from "./registry.js";

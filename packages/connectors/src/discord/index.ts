@@ -65,9 +65,9 @@ export function parseWebhookUrl(url: string): { id: string; token: string } {
 }
 
 function webhookUrlOf(account: ConnectedAccount): string {
-  const fromTokens = account.tokens?.accessToken;
-  const fromConfig = account.config?.webhookUrl;
-  const url = typeof fromTokens === "string" && fromTokens ? fromTokens : fromConfig;
+  // The webhook URL is a credential: it lives only in the encrypted token store, never in `config`
+  // (config rows are projected to the dashboard).
+  const url = account.tokens?.accessToken;
   if (typeof url !== "string" || !url) {
     throw new ConnectorError("Discord account has no webhook URL stored", PLATFORM, "not_configured", false);
   }

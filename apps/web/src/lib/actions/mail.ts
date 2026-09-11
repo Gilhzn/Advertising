@@ -23,12 +23,11 @@ const ProvisionSchema = z.object({
 export type ProvisionMailboxState = { error?: string; ok?: boolean } | undefined;
 
 /**
- * NOTE: `packages/jobs`' `provision_mailbox` schema currently carries only
- * `{ businessId, localPart, forwardTo }` — no `provider`. Until that schema gains a
- * `provider` field, the mailbox row is created here (upserted by unique `address`, same as
- * `provisionMailbox()` in `@adv/email` does internally) so the worker has somewhere to read
- * the chosen provider from and the dashboard has something to render immediately; the
- * `provision_mailbox` job itself is a no-op stub in `apps/worker` as of this writing.
+ * Creates (or re-points) the business mailbox row and enqueues `provision_mailbox`.
+ *
+ * The row is upserted here - by unique `address`, the same way `provisionMailbox()` in `@adv/email`
+ * does internally - so the dashboard has something to render immediately; the job payload carries
+ * the chosen `provider` explicitly rather than relying on the worker's `EMAIL_PROVIDER` default.
  */
 export async function provisionMailboxAction(
   businessId: string,
@@ -76,6 +75,7 @@ export async function provisionMailboxAction(
   await enqueue("provision_mailbox", {
     businessId,
     localPart: input.localPart,
+    provider: input.provider,
     ...(input.forwardTo ? { forwardTo: input.forwardTo } : {}),
   });
 

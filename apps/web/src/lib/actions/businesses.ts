@@ -1,14 +1,12 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { businesses, eq, getDb } from "@adv/db";
 import { enqueue } from "@adv/jobs";
 import { BUSINESS_CATEGORIES, CONTENT_LANGUAGES } from "@adv/shared";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/session";
+import { saveImageUpload, UploadRejectedError } from "@/lib/uploads";
 
 const CreateBusinessSchema = z.object({
   name: z.string().min(1).max(120),
@@ -54,18 +52,6 @@ async function uniqueSlug(base: string): Promise<string> {
   }
 }
 
-async function saveUpload(file: File): Promise<string | undefined> {
-  if (!file || file.size === 0) return undefined;
-  const uploadsDir = path.join(process.cwd(), "public", "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-  const ext = path.extname(file.name) || "";
-  const filename = `${randomUUID()}${ext}`;
-  const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(uploadsDir, filename), buf);
-  // NOTE: local disk storage for now. Move to Cloudflare R2 once packages/media wires it up.
-  return `/uploads/${filename}`;
-}
-
 export type CreateBusinessState = { error?: string } | undefined;
 
 export async function createBusinessAction(
@@ -98,12 +84,6 @@ export async function createBusinessAction(
   }
   const input = parsed.data;
 
-  let imageUrl: string | undefined;
-  const image = formData.get("image");
-  if (image instanceof File) {
-    imageUrl = await saveUpload(image);
-  }
-
   const db = getDb();
   const slug = await uniqueSlug(slugify(input.name));
 
@@ -119,7 +99,6 @@ export async function createBusinessAction(
       primaryLanguage: input.primaryLanguage,
       websiteUrl: input.websiteUrl || null,
       links: input.links,
-      imageUrl: imageUrl ?? null,
       domain: input.domain || null,
       targetRegion: input.targetRegion || null,
       timezone: input.timezone,
@@ -128,6 +107,21 @@ export async function createBusinessAction(
 
   if (!row) {
     return { error: "Could not create the business. Try again." };
+  }
+
+  // Uploaded after the insert so the stored object is keyed by the business it belongs to.
+  const image = formData.get("image");
+  if (image instanceof File) {
+    try {
+      const imageUrl = await saveImageUpload(image, row.id);
+      if (imageUrl) await db.update(businesses).set({ imageUrl }).where(eq(businesses.id, row.id));
+    } catch (err) {
+      if (err instanceof UploadRejectedError) {
+        await db.delete(businesses).where(eq(businesses.id, row.id));
+        return { error: err.message };
+      }
+      throw err;
+    }
   }
 
   await enqueue("discover_business", { businessId: row.id, reason: "initial" });

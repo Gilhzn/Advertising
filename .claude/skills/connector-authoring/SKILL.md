@@ -12,7 +12,7 @@ description: How to add or change a platform connector in packages/connectors - 
    - `publish(account, post)` must be idempotent: check `post.externalId` before re-posting; upload media from a public URL (R2).
    - `fetchInsights(account, since)` returns `MetricSnapshot[]` using only `METRIC_NAMES`.
    - `getRateLimit()` returns tokens/interval used by the publisher's limiter.
-4. **HTTP** only via `packages/connectors/src/http.ts` (`fetchJson`) - timeouts, retry on 429/5xx with backoff honoring `Retry-After`, structured error `ConnectorError { code, retryable, platform }`.
+4. **HTTP** only via `packages/connectors/src/http.ts`; any URL that comes from a user or from model output (media, self-hosted hosts) must pass `assertPublicUrl` from `src/net-guard.ts` first (SSRF); credentials such as webhook URLs go in the encrypted token store, never in `config`. Error strings stored in the DB go through `redactSecrets` (`@adv/shared`) (`fetchJson`) - timeouts, retry on 429/5xx with backoff honoring `Retry-After`, structured error `ConnectorError { code, retryable, platform }`.
 5. **Sandbox/private modes**: if the platform forces private posts before review (TikTok, YouTube, Pinterest) set `capabilities.privateUntilReview = true`; the publisher marks the post `published` with `externalUrl` and a `visibility: private` note.
 6. **Fixtures**: record real response shapes into `__fixtures__/*.json` (secrets stripped). Tests use msw handlers in `<platform>/index.test.ts`: publish success, publish rate-limited then success, refresh flow, insights mapping, error mapping.
 7. **Register** in `packages/connectors/src/registry.ts`.

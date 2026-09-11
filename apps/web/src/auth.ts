@@ -6,7 +6,15 @@ import { buildAdapter } from "@/lib/auth-adapter";
 
 const providers = [];
 
-if (process.env.NODE_ENV !== "production") {
+/**
+ * Dev-only password-less login. Double-gated: never in a production build, and even outside
+ * production it has to be switched on explicitly with `ENABLE_DEV_LOGIN=1` (set in `.env.example`
+ * and in the Playwright webServer env), so a staging deploy built with NODE_ENV!=production cannot
+ * accidentally ship an "any email signs in" provider.
+ */
+const devLoginEnabled = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_LOGIN === "1";
+
+if (devLoginEnabled) {
   providers.push(
     Credentials({
       id: "dev-login",

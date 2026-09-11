@@ -28,9 +28,10 @@ export default defineConfig({
   ],
   webServer: {
     // `next dev`, not build+start: the dev-login Credentials provider (used by the e2e
-    // smoke tests) is only registered when NODE_ENV !== "production".
+    // smoke tests) is only registered when NODE_ENV !== "production" AND ENABLE_DEV_LOGIN=1.
     command: `pnpm exec next dev -p ${PORT}`,
     url: baseURL,
+    env: { ENABLE_DEV_LOGIN: "1" },
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

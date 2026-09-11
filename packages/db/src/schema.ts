@@ -168,6 +168,10 @@ export const oauthStates = pgTable("oauth_states", {
   businessId: uuid("business_id")
     .notNull()
     .references(() => businesses.id, { onDelete: "cascade" }),
+  /** The signed-in user who started the flow; the callback refuses a state belonging to anyone else. */
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   platform: platformEnum("platform").notNull(),
   codeVerifier: text("code_verifier"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

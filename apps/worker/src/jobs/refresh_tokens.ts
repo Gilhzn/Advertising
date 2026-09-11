@@ -1,4 +1,4 @@
-import { getConnector } from "@adv/connectors";
+import { resolveConnector } from "@adv/connectors";
 import { and, eq, getDb, lte, oauthTokens, platformAccounts } from "@adv/db";
 import type { JobPayload } from "@adv/jobs";
 import { logger } from "@adv/shared";
@@ -23,10 +23,10 @@ export async function handleRefreshTokens(jobs: Job<JobPayload<"refresh_tokens">
 
     for (const row of rows) {
       try {
-        const connector = getConnector(row.platform);
-        if (!connector.refresh && !connector.refreshForAccount) continue;
         const account = await loadAccount(row.id);
         if (!account?.tokens) continue;
+        const connector = resolveConnector(row.platform, account);
+        if (!connector.refresh && !connector.refreshForAccount) continue;
         await refreshAccountTokens(connector, account);
         await writeAudit(account.businessId, "system", "refresh_tokens.refreshed", {
           accountId: row.id,

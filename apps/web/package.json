@@ -17,6 +17,7 @@
     "@adv/db": "workspace:*",
     "@adv/email": "workspace:*",
     "@adv/jobs": "workspace:*",
+    "@adv/media": "workspace:*",
     "@adv/shared": "workspace:*",
     "@auth/drizzle-adapter": "^1.11.3",
     "@radix-ui/react-checkbox": "^1.3.11",

@@ -6,6 +6,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { screenHardRules, verdictFor } from "./compliance-rules.js";
 import { type AgentModelSpec, estimateCostUsd, MODEL_POLICY } from "./model-policy.js";
+import { assertMonthlyBudget } from "./runner.js";
 
 /**
  * Thin helpers for the non-agentic Claude calls: short classification and the compliance guard.
@@ -109,6 +110,7 @@ export interface ClassifyResult {
  * Returns the first label that appears in the answer, falling back to the raw text.
  */
 export async function classify(input: ClassifyInput): Promise<ClassifyResult> {
+  if (input.accounting?.businessId) await assertMonthlyBudget(input.accounting.businessId, getDb());
   const spec = MODEL_POLICY.classifier;
   const budget = input.thinkingBudgetTokens ?? 1024;
   const client = getAnthropic();
@@ -223,6 +225,7 @@ export async function complianceCheck(input: ComplianceCheckInput): Promise<Comp
   if (verdictFor(screened) === "block") {
     return { verdict: "block", issues: screened, costUsd: 0, runId: null, screenedLocally: true };
   }
+  if (input.accounting?.businessId) await assertMonthlyBudget(input.accounting.businessId, getDb());
 
   const spec = MODEL_POLICY.complianceGuard;
   const client = getAnthropic();

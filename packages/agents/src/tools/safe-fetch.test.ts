@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertPublicUrl,
   blockedIpReason,
+  createPinnedDispatcher,
   htmlToText,
   type ResolveHost,
   safeFetch,
@@ -201,5 +202,25 @@ describe("safeFetch", () => {
         }),
       }),
     ).rejects.toThrow(/cap is 1024/);
+  });
+});
+
+describe("createPinnedDispatcher", () => {
+  it("answers every lookup with the validated address only", async () => {
+    const dispatcher = createPinnedDispatcher({ address: "93.184.216.34", family: 4 });
+    const lookup = (dispatcher as unknown as { [k: symbol]: unknown })[
+      Object.getOwnPropertySymbols(dispatcher).find((s) => String(s).includes("options")) as symbol
+    ] as
+      | { connect?: { lookup?: (h: string, o: unknown, cb: (...a: unknown[]) => void) => void } }
+      | undefined;
+    const fn = lookup?.connect?.lookup;
+    expect(typeof fn).toBe("function");
+    await new Promise<void>((resolve) => {
+      fn?.("rebind.attacker.tld", { all: true }, (_err, res) => {
+        expect(res).toEqual([{ address: "93.184.216.34", family: 4 }]);
+        resolve();
+      });
+    });
+    await dispatcher.close();
   });
 });

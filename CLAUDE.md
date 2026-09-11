@@ -33,4 +33,4 @@ TypeScript strict, ESM, Biome for lint/format, Vitest + msw for unit tests, Play
 Agents in `.claude/agents` (supervisor, architect, agent-engineer, growth-strategist, backend-dev, frontend-dev, qa-engineer, security-reviewer, researcher). Skills in `.claude/skills` (model-policy, connector-authoring, platform-playbooks, agent-sdk-patterns, dashboard-conventions, release-checklist). Start any multi-file work by delegating to `supervisor`.
 
 ## Plan phases and status
-0 scaffold ✅ · 1 intake + strategy · 2 connectors wave 1 + wizard · 3 content engine + scheduler · 4 email · 5 analytics · 6 AI loop · 7 connectors wave 2 · 8 hardening + deploy
+0 scaffold ✅ · 1 intake + strategy ✅ · 2 connectors wave 1 + wizard ✅ · 3 content engine + scheduler ✅ · 4 email ✅ · 5 analytics ✅ · 6 AI loop ✅ · 7 connectors wave 2 ✅ · 8 hardening ✅ (deploy: see docs/deploy.md; live run needs ANTHROPIC_API_KEY)

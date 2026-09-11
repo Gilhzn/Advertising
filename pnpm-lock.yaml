@@ -38,6 +38,9 @@ importers:
       '@adv/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@adv/media':
+        specifier: workspace:*
+        version: link:../../packages/media
       '@adv/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -208,6 +211,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.125.0
         version: 0.125.0(zod@4.6.2)
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
       zod:
         specifier: ^4.1.0
         version: 4.6.2
@@ -3644,6 +3650,10 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+    engines: {node: '>=20.18.1'}
+
   unicode-segmenter@0.14.5:
     resolution: {integrity: sha512-jHGmj2LUuqDcX3hqY12Ql+uhUTn8huuxNZGq7GvtF6bSybzH3aFgedYu/KTzQStEgt1Ra2F3HxadNXsNjb3m3g==}
 
@@ -6631,6 +6641,8 @@ snapshots:
       multiformats: 9.9.0
 
   undici-types@6.21.0: {}
+
+  undici@7.29.1: {}
 
   unicode-segmenter@0.14.5: {}
 

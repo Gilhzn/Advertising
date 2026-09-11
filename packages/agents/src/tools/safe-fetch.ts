@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { Agent as UndiciAgent, fetch as undiciFetch } from "undici";
 
 /**
  * SSRF-safe URL fetcher for the `fetch_url` engine tool.
@@ -269,17 +270,41 @@ async function readCapped(
   return { text: Buffer.concat(chunks).toString("utf8"), bytes: total, truncated };
 }
 
+/**
+ * Builds a fetch whose TCP connection is pinned to the address we validated, closing the
+ * resolve-then-connect (DNS rebinding) window. TLS still verifies against the original hostname.
+ */
+export function createPinnedDispatcher(pinned: ResolvedAddress): UndiciAgent {
+  // node's dns.lookup callback shape; undici types it as the `net.LookupFunction`
+  const lookup = (_host: string, options: unknown, cb: (...args: unknown[]) => void) => {
+    const all = typeof options === "object" && options !== null && (options as { all?: boolean }).all;
+    if (all) cb(null, [{ address: pinned.address, family: pinned.family }]);
+    else cb(null, pinned.address, pinned.family);
+  };
+  return new UndiciAgent({ connect: { lookup: lookup as unknown as undefined } });
+}
+
+function pinnedFetch(pinned: ResolvedAddress): typeof fetch {
+  const dispatcher = createPinnedDispatcher(pinned);
+  return ((input: string | URL | Request, init?: RequestInit) =>
+    undiciFetch(
+      input as string,
+      { ...(init as object), dispatcher } as never,
+    ) as unknown as Promise<Response>) as typeof fetch;
+}
+
 /** Fetches a public https URL and returns its readable text. Throws `UnsafeUrlError` when blocked. */
 export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Promise<SafeFetchResult> {
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
   const maxRedirects = opts.maxRedirects ?? MAX_REDIRECTS;
-  const doFetch = opts.fetchImpl ?? fetch;
   const resolveHost = opts.resolveHost ?? defaultResolveHost;
   const redirects: string[] = [];
 
   let current = rawUrl;
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const { url } = await assertPublicUrl(current, resolveHost);
+    const { url, addresses } = await assertPublicUrl(current, resolveHost);
+    // Pin every hop to the address that passed validation (re-pinned after each redirect).
+    const doFetch = opts.fetchImpl ?? pinnedFetch(addresses[0] as ResolvedAddress);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15_000);
     let res: Response;

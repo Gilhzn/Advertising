@@ -2,7 +2,7 @@
 
 import { and, eq, getDb, oauthTokens, platformAccounts } from "@adv/db";
 import type { PlatformId } from "@adv/shared";
-import { encryptSecret } from "@adv/shared";
+import { encryptSecret, redactSecrets } from "@adv/shared";
 import { revalidatePath } from "next/cache";
 import { getConnector, hasConnector } from "@/lib/connectors";
 import { getBusinessById } from "@/lib/data/businesses";
@@ -114,12 +114,15 @@ export async function connectWithTokenAction(
         tokens: tokens ?? null,
       });
       if (!verified.ok) {
+        // A connector's verify error can quote the request it made (token in a URL or header),
+        // and `last_error` is rendered in the wizard - redact before storing or returning it.
+        const reason = redactSecrets(verified.error ?? "verification failed");
         await db
           .update(platformAccounts)
-          .set({ status: "error", lastError: verified.error ?? "verification failed" })
+          .set({ status: "error", lastError: reason })
           .where(eq(platformAccounts.id, updated.id));
         revalidatePath(`/b/${slug}/setup`);
-        return { error: verified.error ?? "Could not verify the connection." };
+        return { error: reason || "Could not verify the connection." };
       }
       await db
         .update(platformAccounts)
@@ -134,7 +137,7 @@ export async function connectWithTokenAction(
     revalidatePath(`/b/${slug}/setup`);
     return { ok: true };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Connection failed." };
+    return { error: redactSecrets(err instanceof Error ? err.message : "Connection failed.") };
   }
 }
 

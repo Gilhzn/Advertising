@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { logger, type PlatformId } from "@adv/shared";
 import { ConnectorError } from "./connector.js";
+import { assertPublicUrl } from "./net-guard.js";
 
 /** Hard ceiling for anything we download and re-upload to a platform. */
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -425,8 +426,28 @@ export async function downloadMedia(
   try {
     let res: Response;
     try {
-      res = await fetch(url, { signal: controller.signal });
+      // SSRF guard: only public https hosts, redirects re-validated hop by hop (max 3)
+      let current = (await assertPublicUrl(url, { platform })).toString();
+      let hops = 0;
+      while (true) {
+        res = await fetch(current, { signal: controller.signal, redirect: "manual" });
+        if (res.status >= 300 && res.status < 400) {
+          const loc = res.headers.get("location");
+          if (!loc || ++hops > 3) {
+            throw new ConnectorError(
+              `${platform} media download: too many redirects`,
+              platform,
+              "invalid_media",
+              false,
+            );
+          }
+          current = (await assertPublicUrl(new URL(loc, current).toString(), { platform })).toString();
+          continue;
+        }
+        break;
+      }
     } catch (err) {
+      if (err instanceof ConnectorError) throw err;
       const aborted = controller.signal.aborted;
       throw new ConnectorError(
         aborted

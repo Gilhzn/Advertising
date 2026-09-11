@@ -1,4 +1,4 @@
-import { getConnector } from "@adv/connectors";
+import { resolveConnector } from "@adv/connectors";
 import { and, eq, getDb, metricSnapshots, platformAccounts, posts } from "@adv/db";
 import { JOBS, type JobPayload } from "@adv/jobs";
 import { logger } from "@adv/shared";
@@ -32,7 +32,7 @@ export async function handleFetchInsights(jobs: Job<JobPayload<"fetch_insights">
 
     for (const accRow of accounts) {
       try {
-        const connector = getConnector(accRow.platform);
+        const connector = resolveConnector(accRow.platform, { ...accRow, tokens: null });
         if (!connector.capabilities.insights) continue;
 
         let account = await loadAccount(accRow.id);

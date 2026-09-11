@@ -44,6 +44,8 @@ export interface PlatformMeta {
   };
   /** Typical per-post cost in USD (X pay-per-use) */
   costPerPostUsd?: number;
+  /** Cost when the post contains a link (X charges more) */
+  costPerLinkPostUsd?: number;
 }
 
 export const PLATFORMS: Record<PlatformId, PlatformMeta> = {

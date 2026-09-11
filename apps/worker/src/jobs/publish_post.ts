@@ -1,8 +1,8 @@
 import type { Connector, PublishablePost } from "@adv/connectors";
-import { ConnectorError, getConnector } from "@adv/connectors";
+import { ConnectorError, resolveConnector } from "@adv/connectors";
 import { type Db, eq, getDb, posts, sql } from "@adv/db";
 import { enqueue, JOBS, type JobPayload } from "@adv/jobs";
-import { logger } from "@adv/shared";
+import { logger, redactSecrets } from "@adv/shared";
 import type { Job } from "pg-boss";
 import { isExpiringSoon, loadAccount, refreshAccountTokens } from "../lib/accounts.js";
 import { writeAudit } from "../lib/audit.js";
@@ -12,10 +12,33 @@ import { getRateLimiter } from "../lib/limiter.js";
 const PUBLISHABLE_STATUSES = new Set(["approved", "scheduled", "publishing"]);
 
 /**
+ * How long a `publishing` row may sit untouched before another worker may steal the claim.
+ * A crashed/killed worker would otherwise strand the post in `publishing` forever.
+ */
+const STALE_LEASE = "10 minutes";
+
+/**
+ * `db.execute()` returns postgres.js's result, which is an array of rows (older/other drivers return
+ * `{ rows }`). Normalised here so the claim logic does not depend on the driver shape.
+ * Covered by "claims a post exactly once" in `publish_post.test.ts`.
+ */
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  const rows = (result as { rows?: unknown })?.rows;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}
+
+/**
  * Publishes one post. Idempotent (skips if `externalId` is already set), refuses posts that never
  * went through approval (required for every community post per CLAUDE.md, enforced here for owned
  * posts too), refreshes an expiring token before publishing, and honors the connector's rate limit by
  * re-enqueueing with `startAfter` instead of blocking the worker.
+ *
+ * Concurrency: exactly one worker publishes a post. The atomic claim below flips the row to
+ * `publishing` and only the worker whose UPDATE returned a row proceeds; a `publishing` row whose
+ * `updated_at` is older than `STALE_LEASE` is considered abandoned and may be re-claimed. The claim
+ * is taken as late as possible (after the rate-limit check) and released again on a retryable
+ * failure, so a lease is never held by a job that is not actively publishing.
  */
 export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[]): Promise<void> {
   for (const job of jobs) {
@@ -44,16 +67,18 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       return;
     }
 
-    if (post.status !== "publishing") {
-      const claimed = (await db.execute(sql`
-        UPDATE posts SET status = 'publishing', updated_at = now()
-        WHERE id = ${postId} AND status IN ('approved', 'scheduled')
-        RETURNING id
-      `)) as unknown as Array<{ id: string }>;
-      if (claimed.length === 0) {
-        log.info("publish_post: lost the claim race (already handled elsewhere), skipping");
-        return;
-      }
+    // A post aimed at a community we do not own must carry a recorded human approval, not merely an
+    // `approved` status a job could have set. No retry: only a human can fix this.
+    if (post.communityId && !post.approvedBy) {
+      const reason = "community post has no recorded human approval (approved_by is null)";
+      await failPost(db, postId, reason);
+      await writeAudit(post.businessId, "system", "publish_post.refused", {
+        postId,
+        communityId: post.communityId,
+        reason,
+      });
+      log.warn({ reason }, "publish_post: refused");
+      return;
     }
 
     if (!post.accountId) {
@@ -79,7 +104,7 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
 
     let connector: Connector;
     try {
-      connector = getConnector(account.platform);
+      connector = resolveConnector(account.platform, account);
     } catch (err) {
       const reason = (err as Error).message;
       await failPost(db, postId, reason);
@@ -112,6 +137,26 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       );
       return;
     }
+
+    // Atomic claim. Runs on every attempt, including when this row is already `publishing`: that is
+    // only allowed once the lease has gone stale, which is what lets a crashed worker's post recover.
+    const claimed = resultRows<{ id: string }>(
+      await db.execute(sql`
+        UPDATE posts SET status = 'publishing', updated_at = now()
+        WHERE id = ${postId}
+          AND (
+            status IN ('approved', 'scheduled')
+            OR (status = 'publishing' AND updated_at < now() - interval '${sql.raw(STALE_LEASE)}')
+          )
+        RETURNING id
+      `),
+    );
+    if (claimed.length === 0) {
+      log.info("publish_post: lost the claim race (already handled elsewhere), skipping");
+      return;
+    }
+    /** Where the row goes back to if this attempt does not finish (so the retry can re-claim it). */
+    const releaseStatus = post.status === "approved" ? "approved" : "scheduled";
 
     const publishablePost: PublishablePost = {
       id: post.id,
@@ -157,9 +202,14 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       log.info({ externalId: result.externalId }, "publish_post: published");
     } catch (err) {
       if (err instanceof ConnectorError && err.retryable) {
+        // Release the claim so pg-boss's retry can take it again without waiting out the lease.
         await db
           .update(posts)
-          .set({ attempts: sql`${posts.attempts} + 1`, lastError: err.message })
+          .set({
+            status: releaseStatus,
+            attempts: sql`${posts.attempts} + 1`,
+            lastError: redactSecrets(err.message),
+          })
           .where(eq(posts.id, postId));
         await writeAudit(post.businessId, "system", "publish_post.retry", {
           postId,
@@ -177,6 +227,13 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
   }
 }
 
+/**
+ * Marks a post failed. `lastError` is rendered in the dashboard and kept indefinitely, and connector
+ * errors routinely quote the failing request, so the message is redacted before it is stored.
+ */
 async function failPost(db: Db, postId: string, lastError: string): Promise<void> {
-  await db.update(posts).set({ status: "failed", lastError }).where(eq(posts.id, postId));
+  await db
+    .update(posts)
+    .set({ status: "failed", lastError: redactSecrets(lastError) })
+    .where(eq(posts.id, postId));
 }

@@ -9,3 +9,9 @@
 - Product analytics: PostHog (heatmaps, session replay, HogQL API, Unity/mobile SDKs). Clarity rejected (export API too limited).
 - Images: Claude does not generate images. Uploaded image + satori/sharp templates; external image-gen behind `IMAGE_GEN_PROVIDER`.
 - Model policy: Opus 5 for decisions/strategy/analysis, Sonnet 5 for content, Haiku 4.5 for tagging. See `.claude/skills/model-policy`.
+
+## 2026-09-11 - Hardening
+- Late aggregator is never registered in the platform registry; `resolveConnector(platform, account)` routes only accounts with `config.via = "late"` when `LATE_API_KEY` is set.
+- Assisted platforms (Product Hunt, HN, itch.io, Steam) publish as "prepared for manual posting" (`externalId = manual:<postId>`).
+- SSRF: two guards on purpose - `packages/agents/src/tools/safe-fetch.ts` (model-facing, DNS-pinned) and `packages/connectors/src/net-guard.ts` (media/PDS URLs). Unifying into `@adv/shared` is a follow-up.
+- Security review findings and statuses live in `docs/security-review.md`.

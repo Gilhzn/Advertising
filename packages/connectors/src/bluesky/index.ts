@@ -12,6 +12,7 @@ import {
   type WizardStep,
 } from "../connector.js";
 import { downloadMedia, fetchJson } from "../http.js";
+import { assertPublicUrl } from "../net-guard.js";
 import { composeBody, splitThread } from "../text.js";
 
 const PLATFORM = "bluesky" as const;
@@ -77,6 +78,21 @@ interface Facet {
 function serviceOf(account: Pick<ConnectedAccount, "config">): string {
   const url = account.config?.pdsUrl;
   return typeof url === "string" && url ? url.replace(/\/$/, "") : DEFAULT_SERVICE;
+}
+
+/** A self-hosted PDS must be a plain public https origin (SSRF guard: no ports, paths, private hosts). */
+async function normalizeService(raw: string | undefined): Promise<string> {
+  const s = (raw ?? "").trim().replace(/\/$/, "") || DEFAULT_SERVICE;
+  const u = await assertPublicUrl(s, { platform: PLATFORM });
+  if (u.port || (u.pathname !== "/" && u.pathname !== "") || u.search || u.hash) {
+    throw new ConnectorError(
+      "PDS host must be a plain https origin like https://bsky.social",
+      PLATFORM,
+      "not_configured",
+      false,
+    );
+  }
+  return u.origin;
 }
 
 function xrpc(service: string, nsid: string, params?: Record<string, string | number | undefined>): string {
@@ -305,7 +321,7 @@ export const blueskyConnector: Connector = {
   async connectWithInputs(inputs: Record<string, string>) {
     const handle = (inputs.handle ?? "").trim().replace(/^@/, "");
     const password = (inputs.appPassword ?? inputs.password ?? "").trim();
-    const service = (inputs.service ?? "").trim().replace(/\/$/, "") || DEFAULT_SERVICE;
+    const service = await normalizeService(inputs.service);
     if (!handle || !password) {
       throw new ConnectorError("Handle and app password are required", PLATFORM, "not_configured", false);
     }
