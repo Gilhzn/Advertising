@@ -31,7 +31,12 @@ export default defineConfig({
     // smoke tests) is only registered when NODE_ENV !== "production" AND ENABLE_DEV_LOGIN=1.
     command: `pnpm exec next dev -p ${PORT}`,
     url: baseURL,
-    env: { ENABLE_DEV_LOGIN: "1" },
+    env: {
+      ENABLE_DEV_LOGIN: "1",
+      // Owner-password login, exercised by e2e/owner-login.spec.ts.
+      OWNER_EMAIL: "owner@example.com",
+      OWNER_PASSWORD: "correct-horse-battery-staple",
+    },
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

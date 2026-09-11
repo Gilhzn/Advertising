@@ -1,10 +1,76 @@
 import { eq, getDb, users } from "@adv/db";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Resend from "next-auth/providers/resend";
 import { buildAdapter } from "@/lib/auth-adapter";
+import {
+  checkLoginAttempt,
+  isOwnerLoginEnabled,
+  ownerPasswordCredential,
+  recordLoginFailure,
+  recordLoginSuccess,
+  verifyPassword,
+} from "@/lib/owner-auth";
 
 const providers = [];
+
+/** Thrown by the `owner-login` provider so the login page can tell the two failure modes apart. */
+class RateLimitedError extends CredentialsSignin {
+  code = "rate_limited";
+}
+class InvalidOwnerCredentialsError extends CredentialsSignin {
+  code = "invalid_credentials";
+}
+
+/**
+ * Owner-password login: the single production sign-in path (the dashboard has no self-serve
+ * signup - see CLAUDE.md). Gated on `OWNER_EMAIL` + `OWNER_PASSWORD_HASH`/`OWNER_PASSWORD` being
+ * set (`isOwnerLoginEnabled`), so it's simply absent from `providers` otherwise.
+ */
+if (isOwnerLoginEnabled()) {
+  providers.push(
+    Credentials({
+      id: "owner-login",
+      name: "Owner login",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        // Passed by `ownerSignInAction`, which reads `x-forwarded-for` via `next/headers` - not a
+        // credential the user types, just how the client IP reaches the rate limiter.
+        ip: { label: "IP", type: "text" },
+      },
+      async authorize(credentials) {
+        const ip = String(credentials?.ip ?? "unknown");
+        if (!checkLoginAttempt(ip).allowed) throw new RateLimitedError();
+
+        const email = String(credentials?.email ?? "")
+          .trim()
+          .toLowerCase();
+        const password = String(credentials?.password ?? "");
+        const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+
+        // Never log `password` or the raw credentials object below this line.
+        const matches =
+          email.length > 0 && email === ownerEmail && verifyPassword(password, ownerPasswordCredential());
+        if (!matches) {
+          recordLoginFailure(ip);
+          throw new InvalidOwnerCredentialsError();
+        }
+        recordLoginSuccess(ip);
+
+        const db = getDb();
+        const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+        if (existing) return { id: existing.id, email: existing.email, name: existing.name };
+        const [created] = await db
+          .insert(users)
+          .values({ email, name: email.split("@")[0] })
+          .returning();
+        if (!created) return null;
+        return { id: created.id, email: created.email, name: created.name };
+      },
+    }),
+  );
+}
 
 /**
  * Dev-only password-less login. Double-gated: never in a production build, and even outside

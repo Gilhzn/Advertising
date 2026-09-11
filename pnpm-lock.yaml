@@ -14,6 +14,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.3.0
         version: 2.5.13
+      tsx:
+        specifier: ^4.20.0
+        version: 4.23.13
       turbo:
         specifier: ^2.10.12
         version: 2.10.12
@@ -138,6 +141,9 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.15.0(@types/node@22.20.2)(typescript@5.9.3))(tsx@4.23.13)
 
   apps/worker:
     dependencies:

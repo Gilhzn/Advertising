@@ -38,8 +38,16 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Vercel's build provides its own output packaging; `standalone` is only for the
+  // Docker/Railway deploy path (see docs/deploy.md).
+  output: process.env.VERCEL ? undefined : "standalone",
   serverExternalPackages: ["pg-boss", "postgres", "@resvg/resvg-js"],
+  // `@adv/media`'s satori renderer reads its vendored fonts from disk at runtime
+  // (`packages/media/fonts/*.ttf`); the default file trace misses them since nothing
+  // statically imports the binary files.
+  outputFileTracingIncludes: {
+    "/**": ["../../packages/media/fonts/**"],
+  },
   async headers() {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
