@@ -2,7 +2,17 @@ import "./test-setup.js";
 
 import { randomUUID } from "node:crypto";
 import type { Connector, ConnectorCapabilities } from "@adv/connectors";
-import { businesses, communities, eq, getDb, oauthTokens, platformAccounts, posts, users } from "@adv/db";
+import {
+  businesses,
+  communities,
+  eq,
+  getDb,
+  mailboxes,
+  oauthTokens,
+  platformAccounts,
+  posts,
+  users,
+} from "@adv/db";
 import { encryptSecret } from "@adv/shared";
 import type { Job } from "pg-boss";
 
@@ -107,6 +117,26 @@ export async function createTestCommunity(
     .returning();
   if (!community) throw new Error("failed to insert test community");
   return community;
+}
+
+export async function createTestMailbox(
+  businessId: string,
+  overrides: Partial<typeof mailboxes.$inferInsert> = {},
+) {
+  const db = getDb();
+  const [mailbox] = await db
+    .insert(mailboxes)
+    .values({
+      businessId,
+      address: `hello-${randomUUID()}@example.test`,
+      provider: "cloudflare_routing",
+      status: "pending_dns",
+      dnsRecords: [],
+      ...overrides,
+    })
+    .returning();
+  if (!mailbox) throw new Error("failed to insert test mailbox");
+  return mailbox;
 }
 
 const DEFAULT_CAPABILITIES: ConnectorCapabilities = {

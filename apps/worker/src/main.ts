@@ -15,20 +15,21 @@ import { getBoss, JOBS, type JobName, SCHEDULES, stopBoss } from "@adv/jobs";
 import { logger } from "@adv/shared";
 import type { WorkOptions } from "pg-boss";
 import { registerAllConnectors } from "./connectors-shim.js";
+import { handleContentAutopilot } from "./jobs/content_autopilot.js";
 import { handleDiscoverBusiness } from "./jobs/discover_business.js";
 import { handleFetchInsights } from "./jobs/fetch_insights.js";
 import { handleGenerateContentBatch } from "./jobs/generate_content_batch.js";
+import { handleImproveApp } from "./jobs/improve_app.js";
+import { handleProvisionMailbox } from "./jobs/provision_mailbox.js";
 import { handlePublishDuePosts } from "./jobs/publish_due_posts.js";
 import { handlePublishPost } from "./jobs/publish_post.js";
 import { handleRefreshTokens } from "./jobs/refresh_tokens.js";
 import { handleRunAnalyst } from "./jobs/run_analyst.js";
+import { handleRunAnalystAll } from "./jobs/run_analyst_all.js";
 import { handleRunProductAdvisor } from "./jobs/run_product_advisor.js";
-import {
-  handleImproveApp,
-  handleProvisionMailbox,
-  handleSyncProductAnalytics,
-  handleVerifyMailboxDns,
-} from "./jobs/stubs.js";
+import { handleRunProductAdvisorAll } from "./jobs/run_product_advisor_all.js";
+import { handleSyncProductAnalytics } from "./jobs/sync_product_analytics.js";
+import { handleVerifyMailboxDns } from "./jobs/verify_mailbox_dns.js";
 import { checkHealth } from "./lib/health.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -78,6 +79,21 @@ const REGISTRATIONS: Registration[] = [
     handler: handleVerifyMailboxDns,
   },
   { name: "improve_app", options: { batchSize: 1, localConcurrency: 1 }, handler: handleImproveApp },
+  {
+    name: "run_analyst_all",
+    options: { batchSize: 1, localConcurrency: 1 },
+    handler: handleRunAnalystAll,
+  },
+  {
+    name: "run_product_advisor_all",
+    options: { batchSize: 1, localConcurrency: 1 },
+    handler: handleRunProductAdvisorAll,
+  },
+  {
+    name: "content_autopilot",
+    options: { batchSize: 1, localConcurrency: 1 },
+    handler: handleContentAutopilot,
+  },
 ];
 
 async function main(): Promise<void> {

@@ -25,10 +25,15 @@ export const JOBS = {
     businessId: z.string().uuid(),
     localPart: z.string().default("hello"),
     forwardTo: z.string().email().optional(),
+    /** Overrides `EMAIL_PROVIDER` env when set. */
+    provider: z.enum(["cloudflare_routing", "migadu"]).optional(),
   }),
   verify_mailbox_dns: z.object({ mailboxId: z.string().uuid() }),
   refresh_tokens: z.object({}),
   improve_app: z.object({ businessId: z.string().uuid(), recommendationId: z.string().uuid() }),
+  run_analyst_all: z.object({}),
+  run_product_advisor_all: z.object({}),
+  content_autopilot: z.object({}),
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -40,6 +45,9 @@ export const SCHEDULES: Array<{ name: JobName; cron: string }> = [
   { name: "fetch_insights", cron: "0 */6 * * *" },
   { name: "sync_product_analytics", cron: "30 3 * * *" },
   { name: "refresh_tokens", cron: "15 */12 * * *" },
+  { name: "content_autopilot", cron: "0 4 * * *" },
+  { name: "run_analyst_all", cron: "0 5 * * 1" },
+  { name: "run_product_advisor_all", cron: "30 5 * * 1" },
 ];
 
 let boss: PgBoss | undefined;

@@ -20,6 +20,8 @@ COPY packages/knowledge/package.json packages/knowledge/package.json
 COPY packages/connectors/package.json packages/connectors/package.json
 COPY packages/media/package.json packages/media/package.json
 COPY packages/agents/package.json packages/agents/package.json
+COPY packages/email/package.json packages/email/package.json
+COPY packages/analytics/package.json packages/analytics/package.json
 COPY apps/worker/package.json apps/worker/package.json
 RUN pnpm install --frozen-lockfile
 
@@ -27,7 +29,8 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS builder
 COPY . .
 RUN pnpm --filter @adv/shared --filter @adv/db --filter @adv/jobs --filter @adv/knowledge \
-      --filter @adv/connectors --filter @adv/media --filter @adv/agents --filter @adv/worker build
+      --filter @adv/connectors --filter @adv/media --filter @adv/agents --filter @adv/email \
+      --filter @adv/analytics --filter @adv/worker build
 # `--legacy`: this workspace does not set `inject-workspace-packages=true`, so pnpm v10's default
 # hard-linked "injected" deploy is unavailable - the legacy deploy (copy + resolve from the store)
 # works the same for a production image and needs no workspace-wide config change.
@@ -38,6 +41,10 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
+
+# `git` is required at runtime by the opt-in `improve_app` job (Phase 6b), which shells out to
+# `git clone`/`checkout`/`commit`/`push` in a temp dir - see src/jobs/improve_app.ts.
+RUN apk add --no-cache git
 
 RUN addgroup --system --gid 1001 worker && adduser --system --uid 1001 worker
 

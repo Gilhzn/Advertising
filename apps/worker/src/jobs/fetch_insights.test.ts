@@ -90,4 +90,32 @@ describe("fetch_insights", () => {
     const rows = await db.select().from(metricSnapshots).where(eq(metricSnapshots.accountId, account.id));
     expect(rows).toHaveLength(0);
   });
+
+  it("still fetches insights for a privateUntilReview (pre-audit) account that supports insights", async () => {
+    const account = await createTestAccount(biz.businessId, { handle: "pre-audit-account" });
+    registerConnector(
+      makeFakeConnector({
+        capabilities: {
+          text: true,
+          image: true,
+          video: true,
+          carousel: false,
+          nativeSchedule: false,
+          insights: true,
+          privateUntilReview: true,
+          maxChars: 300,
+          maxMedia: 4,
+          imageAspects: ["1:1"],
+        },
+        fetchInsights: async () => [{ metric: "views", value: 7, capturedAt: new Date().toISOString() }],
+      }),
+    );
+
+    await handleFetchInsights([fakeJob({ businessId: biz.businessId })]);
+
+    const db = getDb();
+    const rows = await db.select().from(metricSnapshots).where(eq(metricSnapshots.accountId, account.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.metric).toBe("views");
+  });
 });

@@ -29,10 +29,22 @@ work handler with an array — so every handler loops over `jobs`.
 
 Thin wrappers (`src/lib/agent-job.ts`) around the corresponding `@adv/agents` entry point (imported via
 `src/agents-shim.ts`, which throws a clear "not available" error if `@adv/agents` has not exported the
-function yet — expected while that package is built out concurrently). On success or failure they write
-one `audit_log` row (`<job>.completed` / `<job>.failed`) and re-throw on failure so pg-boss retries.
+function yet — expected while that package is built out concurrently). `runAgentJob` writes one
+`audit_log` row per outcome:
+
+- success → `<job>.completed`.
+- `BudgetExceededError` (the business has spent its `businesses.ai_monthly_budget_usd` for the month,
+  thrown by `@adv/agents`'s `assertMonthlyBudget` before any tokens are spent) → `<job>.budget_exceeded`,
+  and the handler returns **without throwing** — this is an expected, terminal business condition, not a
+  transient failure, so pg-boss must not retry it (retrying would just hit the same cap again).
+- any other error → `<job>.failed`, and re-throws so pg-boss retries per the queue's `retryLimit`.
+
 Idempotency is the agent's responsibility (each run persists a new `agent_runs` row / brand kit version
 / content batch; re-running is "generate another version", not "duplicate a resource").
+
+`run_analyst` additionally snapshots `businesses.weights` before and after the run; if the analyst
+changed it, it enqueues `discover_business` with `reason: "replan"` so the strategist re-plans channels
+against the newly-learned weights. No change is made when weights are unchanged (the common case).
 
 ### `publish_due_posts` (cron: every minute)
 
@@ -87,12 +99,75 @@ error is logged and the loop continues.
 ### `refresh_tokens` (cron: every 12h)
 
 Refreshes every `connected` account whose token `expiresAt` is within the next 24h and whose connector
-implements `refresh`. Per-account `try/catch`, same as `fetch_insights`.
+implements `refresh`/`refreshForAccount`. Per-account `try/catch`, same as `fetch_insights`. This is
+platform-generic: an account on a `capabilities.privateUntilReview` platform (TikTok/YouTube/Pinterest
+pre-audit) is refreshed exactly the same as any other connected account — private-until-review only
+affects what `publish_post` does with the resulting post, not token refresh.
 
-### `sync_product_analytics`, `provision_mailbox`, `verify_mailbox_dns`, `improve_app`
+### `run_analyst_all` (cron: Monday 05:00 UTC)
 
-Not implemented in this phase (owned by `packages/analytics`, `packages/email`, and the app-improvement
-coding agent respectively, none of which exist yet). Each handler validates its payload, logs a
-`"<job>: not implemented in this phase"` line, writes a `<job>.skipped` audit row, and completes
-successfully — this keeps `sync_product_analytics`'s cron schedule from accumulating retries and keeps
-anything that enqueues the other three from hanging forever.
+Fans out one `run_analyst` job (`singletonKey = businessId`) per business with at least one `published`
+post — a business with nothing published yet has no metrics for the analyst to learn from.
+
+### `run_product_advisor_all` (cron: Monday 05:30 UTC)
+
+Fans out one `run_product_advisor` job (`singletonKey = businessId`) per business with a linked PostHog
+project (`businesses.posthog_project_id is not null`) — the product advisor has nothing to read
+otherwise.
+
+### `content_autopilot` (cron: daily 04:00 UTC)
+
+For every business with an **approved** channel plan (`channel_plans.approved_at is not null`) and at
+least one **connected** platform account, counts posts already on the calendar for the next 7 days
+(`status IN ('scheduled','approved','publishing','published')`); if fewer than 3, enqueues
+`generate_content_batch` with `singletonKey = businessId` so a still-running batch from a previous day
+is never duplicated.
+
+### `sync_product_analytics` (cron: daily 03:30 UTC; optionally scoped to one `businessId`)
+
+Calls `@adv/analytics`'s `syncProductAnalytics` for the payload's `businessId`, or — on the cron run —
+for every business with a linked PostHog project. Each business runs in its own `try/catch` (writes
+`sync_product_analytics.synced` / `.skipped` / `.failed`) so one bad project never stops the batch, and
+the handler itself never throws (keeps the cron schedule from accumulating retries).
+
+### `provision_mailbox`
+
+Calls `@adv/email`'s `provisionMailbox` (Cloudflare Email Routing or Migadu, chosen by `payload.provider`
+or the `EMAIL_PROVIDER` env var) using `businesses.domain`. Terminal, non-retrying skips (logged +
+audited as `.failed`, no throw) when the business is missing, has no `domain`, or no provider is
+configured. On any other failure: retries only when `EmailProviderError.retryable` is `true` (a
+transient network blip) — `provisionMailbox` itself already persisted the mailbox row as `status:
+'error'` for anything else, so re-running would just fail identically. On success (`status !== 'error'`),
+enqueues `verify_mailbox_dns` with `startAfter = now + 2min` so DNS propagation gets a moment first.
+
+### `verify_mailbox_dns`
+
+Calls `@adv/email`'s `verifyMailboxDns` to re-resolve live DNS against the mailbox's stored required
+records. While the result is `pending_dns` and the mailbox row is under 48h old (`mailboxes.created_at`),
+re-enqueues itself 10 minutes out (`singletonKey = mailboxId`); past 48h it gives up and leaves the
+mailbox `pending_dns` for a human to chase (`verify_mailbox_dns.timed_out` audit row).
+
+### `improve_app` (Phase 6b, opt-in)
+
+Given an **accepted** recommendation, clones `businesses.app_repo_url` (needs `GITHUB_TOKEN`; the token
+is embedded in the clone/push URL and never logged — errors from git commands are redacted before being
+logged or stored), runs a *separate* Agent SDK `query()` (model: `MODEL_POLICY.appImprover`, `cwd` = the
+clone dir, `allowedTools: ["Read","Edit","Write","Glob","Grep","Bash"]`,
+`maxBudgetUsd: JOB_BUDGETS_USD.improve_app`) instructed to implement the smallest change addressing the
+recommendation, run the repo's existing tests, and write `PR_BODY.md`. Records its own `agent_runs` row
+directly (the shared `@adv/agents` `runAgentJob` hardcodes `disallowedTools: ["Bash","Write","Edit",...]`
+for runtime marketing agents, which is the opposite of what this job needs).
+
+Guards, matching CLAUDE.md's hard constraint ("the app-improvement agent only opens PRs; never pushes to
+a user's repo"):
+
+- Aborts with no PR when the agent produced no diff (`git status --porcelain` empty) —
+  `improve_app.no_changes` audit row.
+- `assertPushableBranch` refuses to push if the target branch (`adv/<recommendation-id-short>`) is ever
+  equal to the repo's default branch.
+- Only ever pushes the new branch and opens a PR (`POST /repos/{owner}/{repo}/pulls`) - never merges,
+  never pushes to `base`.
+
+On success: `recommendations.pr_url` + `status = 'implemented'`. The pure parts (repo URL parsing, clone
+URL/branch naming, PR body assembly, the default-branch guard) are unit-tested directly; the git/SDK/
+GitHub-API orchestration is exercised only by typecheck (no network/SDK calls happen in tests).

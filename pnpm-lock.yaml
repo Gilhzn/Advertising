@@ -23,12 +23,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@adv/analytics':
+        specifier: workspace:*
+        version: link:../../packages/analytics
       '@adv/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
       '@adv/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@adv/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@adv/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -135,12 +141,18 @@ importers:
       '@adv/agents':
         specifier: workspace:*
         version: link:../../packages/agents
+      '@adv/analytics':
+        specifier: workspace:*
+        version: link:../../packages/analytics
       '@adv/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
       '@adv/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@adv/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@adv/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -150,6 +162,9 @@ importers:
       '@adv/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.3.268
+        version: 0.3.268(@anthropic-ai/sdk@0.125.0(zod@4.6.2))(@modelcontextprotocol/sdk@1.30.0(zod@4.6.2))(zod@4.6.2)
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
