@@ -53,6 +53,14 @@ export const BrandKitSchema = z.object({
   visualStyle: z.string(),
   keywords: z.array(z.string()).max(30),
   hashtags: z.array(z.string().regex(/^#\S+$/)).max(30),
+  /** Downloadable profile-picture/banner assets rendered from this kit's palette (plan item 11). */
+  assets: z
+    .object({
+      avatarUrl: z.url().optional(),
+      bannerUrl: z.url().optional(),
+      generatedAt: z.iso.datetime().optional(),
+    })
+    .optional(),
 });
 export type BrandKit = z.infer<typeof BrandKitSchema>;
 

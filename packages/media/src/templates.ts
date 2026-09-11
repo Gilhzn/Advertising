@@ -31,7 +31,11 @@ export function buildScene(ctx: TemplateContext): SNode {
   };
 
   const body = TEMPLATE_BUILDERS[input.template](ctx, { scale, pad, rtl });
-  return el("div", outer, [body, businessTag(ctx, { scale, pad, rtl })]);
+  // Brand assets (avatar/banner) render the business identity themselves; the floating name pill
+  // that every other template gets would be redundant clutter on a small square logo or a banner
+  // that already spells the name out.
+  const showBusinessTag = input.template !== "avatar" && input.template !== "banner";
+  return el("div", outer, [body, ...(showBusinessTag ? [businessTag(ctx, { scale, pad, rtl })] : [])]);
 }
 
 function businessTag(ctx: TemplateContext, o: Vars): SNode {
@@ -391,6 +395,141 @@ function plainPhoto(ctx: TemplateContext, o: Vars): SNode {
   ]);
 }
 
+/** "Acme Robotics" -> "AR"; a single-word name -> its first two letters. */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const [first, second] = words;
+  if (!first) return "";
+  if (!second) return first.slice(0, 2).toUpperCase();
+  return `${first[0] ?? ""}${second[0] ?? ""}`.toUpperCase();
+}
+
+/** Square avatar/profile-picture asset: product image if we have one, else initials on the brand color. */
+function avatar(ctx: TemplateContext, o: Vars): SNode {
+  const { input } = ctx;
+  const photo = productImage(ctx, { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 });
+  if (photo) {
+    return el(
+      "div",
+      {
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        backgroundColor: input.brand.primary,
+      },
+      photo,
+    );
+  }
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      height: "100%",
+      backgroundColor: input.brand.primary,
+      gap: `${Math.round(20 * o.scale)}px`,
+      padding: `${Math.round(60 * o.scale)}px`,
+    },
+    [
+      el(
+        "div",
+        {
+          display: "flex",
+          fontSize: `${Math.round(340 * o.scale)}px`,
+          fontWeight: 800,
+          color: input.brand.background,
+          lineHeight: 1,
+        },
+        initials(input.businessName),
+      ),
+      input.headline
+        ? el(
+            "div",
+            {
+              display: "flex",
+              fontSize: `${Math.round(46 * o.scale)}px`,
+              fontWeight: 600,
+              color: `${input.brand.background}cc`,
+              textAlign: "center",
+              lineHeight: 1.2,
+            },
+            input.headline,
+          )
+        : null,
+    ].filter((n): n is SNode => n !== null),
+  );
+}
+
+/** Wide (3:1) profile-banner asset: business name, tagline and a small palette swatch, RTL aware. */
+function banner(ctx: TemplateContext, o: Vars): SNode {
+  const { input } = ctx;
+  const swatch = (color: string) =>
+    el("div", {
+      display: "flex",
+      width: `${Math.round(30 * o.scale)}px`,
+      height: `${Math.round(30 * o.scale)}px`,
+      borderRadius: `${Math.round(8 * o.scale)}px`,
+      backgroundColor: color,
+    });
+
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      width: "100%",
+      height: "100%",
+      padding: `0 ${o.pad}px`,
+      backgroundColor: input.brand.background,
+      backgroundImage: `linear-gradient(${o.rtl ? "to left" : "to right"}, ${input.brand.primary}26 0%, ${input.brand.background} 65%)`,
+      gap: `${Math.round(16 * o.scale)}px`,
+    },
+    [
+      el(
+        "div",
+        {
+          display: "flex",
+          fontSize: `${Math.round(78 * o.scale)}px`,
+          fontWeight: 800,
+          color: input.brand.text,
+          textAlign: o.rtl ? "right" : "left",
+          alignSelf: o.rtl ? "flex-end" : "flex-start",
+        },
+        input.businessName,
+      ),
+      input.headline
+        ? el(
+            "div",
+            {
+              display: "flex",
+              fontSize: `${Math.round(36 * o.scale)}px`,
+              fontWeight: 500,
+              color: input.brand.secondary,
+              textAlign: o.rtl ? "right" : "left",
+              alignSelf: o.rtl ? "flex-end" : "flex-start",
+            },
+            input.headline,
+          )
+        : null,
+      el(
+        "div",
+        {
+          display: "flex",
+          flexDirection: "row",
+          gap: `${Math.round(12 * o.scale)}px`,
+          alignSelf: o.rtl ? "flex-end" : "flex-start",
+        },
+        [swatch(input.brand.primary), swatch(input.brand.secondary), swatch(input.brand.accent)],
+      ),
+    ].filter((n): n is SNode => n !== null),
+  );
+}
+
 const TEMPLATE_BUILDERS: Record<RenderInput["template"], (ctx: TemplateContext, o: Vars) => SNode> = {
   announcement,
   quote,
@@ -398,4 +537,6 @@ const TEMPLATE_BUILDERS: Record<RenderInput["template"], (ctx: TemplateContext, 
   before_after: beforeAfter,
   stat,
   plain_photo: plainPhoto,
+  avatar,
+  banner,
 };

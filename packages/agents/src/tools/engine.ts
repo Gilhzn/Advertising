@@ -20,8 +20,10 @@ import {
 import { loadCategory, loadPlaybook, loadRules } from "@adv/knowledge";
 import {
   type Aspect,
+  generateAndUpload as defaultGenerateAndUpload,
   renderTemplate as defaultRenderTemplate,
   uploadMedia as defaultUploadMedia,
+  isImageGenEnabled,
   type TemplateId,
 } from "@adv/media";
 import {
@@ -85,6 +87,10 @@ export interface EngineContext {
   media?: {
     renderTemplate: typeof defaultRenderTemplate;
     uploadMedia: typeof defaultUploadMedia;
+  };
+  /** injectable for tests: defaults to @adv/media's generateAndUpload (the optional image-gen plugin) */
+  imageGen?: {
+    generateAndUpload: typeof defaultGenerateAndUpload;
   };
   fetchOptions?: SafeFetchOptions;
 }
@@ -647,6 +653,64 @@ function renderImageTool(ctx: EngineContext) {
   );
 }
 
+function generateImageTool(ctx: EngineContext) {
+  return tool(
+    "generate_image",
+    "Generate a photographic/illustrative hero image from a text prompt using the configured external image-gen provider, and attach it to a post. Only call this for platforms whose `supports.image` is true. Prefer render_image instead for text-heavy branded cards (a headline, a stat, a quote).",
+    {
+      postId: z.string().uuid(),
+      prompt: z
+        .string()
+        .min(1)
+        .max(1000)
+        .describe(
+          "Scene/subject description plus brand-consistency clauses (palette mood, visual style, 'no text or lettering, no logos or trademarks, no real or recognisable people').",
+        ),
+      aspect: z.enum(["1:1", "4:5", "16:9", "9:16", "1.91:1"]),
+      altText: z.string().min(1).max(1000).describe("required for accessibility"),
+    },
+    async (args): Promise<ToolResult> => {
+      const [post] = await ctx.db
+        .select()
+        .from(posts)
+        .where(and(eq(posts.id, args.postId), eq(posts.businessId, ctx.businessId)))
+        .limit(1);
+      if (!post) return fail("post not found for this business");
+      const meta = PLATFORMS[post.platform];
+      if (!meta.supports.image) {
+        return fail(`${meta.label} does not support images; do not generate one for this post.`);
+      }
+
+      const generateFn = ctx.imageGen?.generateAndUpload ?? defaultGenerateAndUpload;
+
+      try {
+        const generated = await generateFn({
+          businessId: ctx.businessId,
+          prompt: args.prompt,
+          aspect: args.aspect as Aspect,
+          key: `${post.id}-gen-${args.aspect.replace(":", "x")}`,
+        });
+        const asset: MediaAsset = MediaAssetSchema.parse({
+          kind: "image",
+          url: generated.url,
+          width: generated.width,
+          height: generated.height,
+          altText: args.altText,
+        });
+        const media = [...(post.media ?? []), asset as unknown as Record<string, unknown>];
+        await ctx.db.update(posts).set({ media, updatedAt: new Date() }).where(eq(posts.id, post.id));
+        track(ctx, "mediaUrls", asset.url);
+        return ok({ postId: post.id, asset, mediaCount: media.length });
+      } catch (err) {
+        return fail(`generate/upload failed: ${err instanceof Error ? err.message : String(err)}`, {
+          postId: post.id,
+          hint: "Continue without an image, or fall back to render_image; do not retry more than once.",
+        });
+      }
+    },
+  );
+}
+
 /** Shared by the tool and the PreToolUse hook: what schedule_post will do with this post. */
 export async function schedulingDecision(
   db: Db,
@@ -989,7 +1053,11 @@ function fetchUrlTool(ctx: EngineContext) {
   );
 }
 
-/** Every engine tool, in a stable order (stable tool lists keep the prompt cache warm). */
+/**
+ * Every engine tool, in a stable order (stable tool lists keep the prompt cache warm). `generate_image`
+ * is only appended - after `render_image`, so the rest of the order never shifts - when the optional
+ * image-gen plugin is configured (`isImageGenEnabled()`); it is entirely absent otherwise.
+ */
 export function buildEngineTools(ctx: EngineContext) {
   return [
     getBusinessTool(ctx),
@@ -1000,6 +1068,7 @@ export function buildEngineTools(ctx: EngineContext) {
     createPostDraftTool(ctx),
     checkComplianceTool(ctx),
     renderImageTool(ctx),
+    ...(isImageGenEnabled() ? [generateImageTool(ctx)] : []),
     schedulePostTool(ctx),
     getMetricsTool(ctx),
     getProductAnalyticsTool(ctx),

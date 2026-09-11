@@ -4,6 +4,7 @@ import { JsonSection, KeyValue, Pill } from "@/components/json-section";
 import { PageHeader } from "@/components/page-header";
 import { PlatformBadge } from "@/components/platform-badge";
 import { RunPoller } from "@/components/run-poller";
+import { BrandAssetsCard } from "@/components/strategy/brand-assets-card";
 import { BrandKitEditor } from "@/components/strategy/brand-kit-editor";
 import { StrategyActions } from "@/components/strategy/strategy-actions";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,12 @@ export default async function StrategyPage({ params }: { params: Promise<{ slug:
           description="Click Re-run to kick off the strategist and generate a brand kit and channel plan."
         />
       ) : null}
+
+      {/* Rendered as soon as the page exists, not gated on a brand kit: generating shows a clear
+          "run the strategist first" error rather than the card disappearing. */}
+      <div className="mt-4">
+        <BrandAssetsCard businessId={business.id} slug={slug} assets={brandKit?.assets} />
+      </div>
 
       {brandKit ? (
         <div className="flex flex-col gap-4">

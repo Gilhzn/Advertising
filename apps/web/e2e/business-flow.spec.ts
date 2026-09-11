@@ -15,6 +15,11 @@ test("create a business and open its strategy, setup and content pages", async (
   await page.waitForURL(/\/b\/.+\/strategy/);
   await expect(page.getByRole("heading", { name: "Strategy" })).toBeVisible();
 
+  // Brand assets card: shown even before the strategist has produced a brand kit, as its own
+  // empty state (plan item 11 - avatar/banner download assets).
+  await expect(page.getByRole("heading", { name: "Brand assets" })).toBeVisible();
+  await expect(page.getByText("No brand assets yet")).toBeVisible();
+
   const slugMatch = page.url().match(/\/b\/([^/]+)\/strategy/);
   const slug = slugMatch?.[1];
   expect(slug).toBeTruthy();

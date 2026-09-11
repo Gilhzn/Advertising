@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { communities, type Db, eq, getDb, posts } from "@adv/db";
+import type { generateAndUpload as realGenerateAndUpload } from "@adv/media";
 import { PLATFORMS, type PostDraft } from "@adv/shared";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   channelPlanFixture,
   createTestBusiness,
@@ -305,5 +306,110 @@ describe("fetch_url tool", () => {
     });
     expect(res.isError).toBe(true);
     expect(String(res.data.error)).toMatch(/link-local\/metadata/);
+  });
+});
+
+describe("generate_image tool (optional IMAGE_GEN_PROVIDER plugin)", () => {
+  it("is absent from the tool list when the plugin is disabled", async () => {
+    // The module-level `server` above was built without IMAGE_GEN_PROVIDER/IMAGE_GEN_API_KEY set, so
+    // isImageGenEnabled() was false at buildEngineTools() time and generate_image was never registered.
+    expect(server.tools.some((t) => t.name === "generate_image")).toBe(false);
+    const res = await callEngineTool(server, "generate_image", {
+      postId: randomUUID(),
+      prompt: "a cozy reading nook",
+      aspect: "1:1",
+      altText: "alt",
+    }).catch((e) => e as Error);
+    expect(res).toBeInstanceOf(Error);
+    expect(String((res as Error).message)).toMatch(/unknown engine tool/);
+  });
+
+  describe("when enabled", () => {
+    let enabledServer: EngineServer;
+    const stubGenerateAndUpload: typeof realGenerateAndUpload = async (input) => ({
+      url: `https://cdn.example.test/${input.businessId}/${input.key ?? "gen"}.png`,
+      width: 1080,
+      height: 1080,
+    });
+
+    beforeAll(() => {
+      vi.stubEnv("IMAGE_GEN_PROVIDER", "openai");
+      vi.stubEnv("IMAGE_GEN_API_KEY", "test-key");
+      enabledServer = createEngineServer({
+        businessId: biz.businessId,
+        runId,
+        db,
+        created: emptyCreatedIds(),
+        complianceFn: stubCompliance,
+        media: stubMedia,
+        imageGen: { generateAndUpload: stubGenerateAndUpload },
+      });
+    });
+    afterAll(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("is registered on the tool list", () => {
+      expect(enabledServer.tools.some((t) => t.name === "generate_image")).toBe(true);
+    });
+
+    it("generates an image and attaches it to the post", async () => {
+      const created = await callEngineTool(enabledServer, "create_post_draft", {
+        post: {
+          platform: "bluesky",
+          language: "en",
+          pillarId: "product-proof",
+          body: "A short caption for the hero image.",
+          hashtags: [],
+          media: [],
+        } satisfies PostDraft,
+      });
+      expect(created.isError).toBe(false);
+      const postId = String(created.data.postId);
+
+      const res = await callEngineTool(enabledServer, "generate_image", {
+        postId,
+        prompt: "a cozy reading nook, warm light, no text or lettering, no logos, no real people",
+        aspect: "1:1",
+        altText: "A warmly lit reading nook.",
+      });
+      expect(res.isError).toBe(false);
+      expect(res.data.mediaCount).toBe(1);
+      const asset = res.data.asset as Record<string, unknown>;
+      expect(asset.kind).toBe("image");
+      expect(String(asset.url)).toContain(biz.businessId);
+      expect(asset.altText).toBe("A warmly lit reading nook.");
+
+      const [row] = await db.select().from(posts).where(eq(posts.id, postId));
+      expect(row?.media).toHaveLength(1);
+    });
+
+    it("refuses platforms that do not support images", async () => {
+      const created = await callEngineTool(enabledServer, "create_post_draft", {
+        post: {
+          platform: "hacker_news",
+          language: "en",
+          pillarId: "product-proof",
+          title: "Show HN: a small tool",
+          body: "A short, honest description.",
+          hashtags: [],
+          media: [],
+        } satisfies PostDraft,
+      });
+      expect(created.isError).toBe(false);
+      const postId = String(created.data.postId);
+
+      const res = await callEngineTool(enabledServer, "generate_image", {
+        postId,
+        prompt: "a cozy reading nook",
+        aspect: "1:1",
+        altText: "alt",
+      });
+      expect(res.isError).toBe(true);
+      expect(String(res.data.error)).toMatch(/does not support images/);
+
+      const [row] = await db.select().from(posts).where(eq(posts.id, postId));
+      expect(row?.media).toHaveLength(0);
+    });
   });
 });

@@ -8,6 +8,7 @@ import { WizardCard } from "@/components/setup/wizard-card";
 import { ensureConnectorsRegistered, getConnector, hasConnector } from "@/lib/connectors";
 import { listAccounts } from "@/lib/data/accounts";
 import { getBusinessBySlug } from "@/lib/data/businesses";
+import { getContactEmailForBusiness } from "@/lib/data/mailboxes";
 import {
   getLatestBrandKit,
   getLatestChannelPlan,
@@ -22,10 +23,11 @@ export default async function SetupPage({ params }: { params: Promise<{ slug: st
   const business = await getBusinessBySlug(user.id, slug);
   ensureConnectorsRegistered();
 
-  const [brandKitRow, channelPlanRow, accounts] = await Promise.all([
+  const [brandKitRow, channelPlanRow, accounts, contactEmail] = await Promise.all([
     getLatestBrandKit(business.id),
     getLatestChannelPlan(business.id),
     listAccounts(business.id),
+    getContactEmailForBusiness(business.id),
   ]);
   const brandKit = parseBrandKit(brandKitRow);
   const channelPlan = parseChannelPlan(channelPlanRow);
@@ -39,7 +41,7 @@ export default async function SetupPage({ params }: { params: Promise<{ slug: st
   const ctx = {
     businessName: business.name,
     websiteUrl: business.websiteUrl,
-    contactEmail: undefined,
+    contactEmail,
   };
 
   return (

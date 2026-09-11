@@ -1,8 +1,9 @@
 "use server";
 
-import { brandKits, channelPlans, desc, eq, getDb } from "@adv/db";
+import { auditLog, brandKits, channelPlans, desc, eq, getDb } from "@adv/db";
 import { enqueue } from "@adv/jobs";
-import type { BrandKit } from "@adv/shared";
+import { renderTemplate, uploadMedia } from "@adv/media";
+import { type BrandKit, BrandKitSchema } from "@adv/shared";
 import { revalidatePath } from "next/cache";
 import { getBusinessById } from "@/lib/data/businesses";
 import { requireUser } from "@/lib/session";
@@ -94,5 +95,105 @@ export async function updateBrandKitAction(
   });
 
   revalidatePath(`/b/${slug}/strategy`);
+  return { ok: true };
+}
+
+export type GenerateBrandAssetsState = { error?: string; ok?: boolean } | undefined;
+
+/**
+ * Renders an avatar (1:1) and a banner (3:1) from the latest brand kit's palette/tagline/business name
+ * (plus the business's product image, if any), uploads both under deterministic keys so re-generating
+ * overwrites the same URLs, and stores those URLs on a new brand kit version.
+ */
+export async function generateBrandAssetsAction(
+  businessId: string,
+  slug: string,
+): Promise<GenerateBrandAssetsState> {
+  const user = await requireUser();
+  const business = await getBusinessById(user.id, businessId);
+  if (!business) throw new Error("Not found");
+
+  const db = getDb();
+  const [latest] = await db
+    .select()
+    .from(brandKits)
+    .where(eq(brandKits.businessId, businessId))
+    .orderBy(desc(brandKits.version))
+    .limit(1);
+  const parsed = latest ? BrandKitSchema.safeParse(latest.data) : null;
+  if (!latest || !parsed?.success) {
+    return { error: "Generate a strategy first, then come back to render brand assets." };
+  }
+  const kit = parsed.data;
+
+  const brand = {
+    ...kit.palette,
+    imageUrl: business.imageUrl,
+    direction: business.primaryLanguage === "he" ? ("rtl" as const) : ("ltr" as const),
+  };
+
+  const [avatarRendered, bannerRendered] = await Promise.all([
+    renderTemplate({
+      template: "avatar",
+      aspect: "1:1",
+      headline: kit.tagline,
+      brand,
+      businessName: business.name,
+    }),
+    renderTemplate({
+      template: "banner",
+      aspect: "3:1",
+      headline: kit.tagline,
+      brand,
+      businessName: business.name,
+    }),
+  ]);
+
+  const [avatarUpload, bannerUpload] = await Promise.all([
+    uploadMedia({
+      businessId,
+      buffer: avatarRendered.buffer,
+      contentType: avatarRendered.mimeType,
+      ext: "png",
+      key: "brand/avatar",
+    }),
+    uploadMedia({
+      businessId,
+      buffer: bannerRendered.buffer,
+      contentType: bannerRendered.mimeType,
+      ext: "png",
+      key: "brand/banner",
+    }),
+  ]);
+
+  const nextData: BrandKit = {
+    ...kit,
+    assets: {
+      avatarUrl: avatarUpload.url,
+      bannerUrl: bannerUpload.url,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+
+  await db.insert(brandKits).values({
+    businessId,
+    version: latest.version + 1,
+    data: nextData,
+  });
+
+  try {
+    await db.insert(auditLog).values({
+      businessId,
+      actor: `user:${user.id}`,
+      action: "brand_assets.generated",
+      target: businessId,
+      payload: { avatarUrl: avatarUpload.url, bannerUrl: bannerUpload.url },
+    });
+  } catch (err) {
+    console.error("[audit_log] failed to write", { action: "brand_assets.generated", err });
+  }
+
+  revalidatePath(`/b/${slug}/strategy`);
+  revalidatePath(`/b/${slug}/setup`);
   return { ok: true };
 }

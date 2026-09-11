@@ -25,3 +25,5 @@ export async function renderTemplate(input: RenderInput): Promise<RenderOutput> 
 export async function uploadMedia(input: UploadInput): Promise<UploadOutput> {
   return uploadMediaImpl(input);
 }
+
+export * from "./imagegen/index.js";

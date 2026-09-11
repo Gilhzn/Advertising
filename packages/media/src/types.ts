@@ -2,8 +2,16 @@
  * Media rendering + storage contract types. See `index.ts` for the public surface re-export and
  * `render.ts` / `upload.ts` for the implementation.
  */
-export type TemplateId = "announcement" | "quote" | "feature" | "before_after" | "stat" | "plain_photo";
-export type Aspect = "1:1" | "4:5" | "16:9" | "9:16" | "1.91:1";
+export type TemplateId =
+  | "announcement"
+  | "quote"
+  | "feature"
+  | "before_after"
+  | "stat"
+  | "plain_photo"
+  | "avatar"
+  | "banner";
+export type Aspect = "1:1" | "4:5" | "16:9" | "9:16" | "1.91:1" | "3:1";
 
 export interface BrandStyle {
   primary: string;
@@ -59,4 +67,6 @@ export const ASPECT_SIZES: Record<Aspect, { width: number; height: number }> = {
   "16:9": { width: 1280, height: 720 },
   "9:16": { width: 1080, height: 1920 },
   "1.91:1": { width: 1200, height: 628 },
+  /** brand banner (avatar/banner download assets) */
+  "3:1": { width: 1500, height: 500 },
 };

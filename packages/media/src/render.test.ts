@@ -66,6 +66,39 @@ describe("renderTemplate", () => {
   }, 30_000);
 });
 
+describe("brand asset templates", () => {
+  it("renders avatar (1:1) with initials on the brand color when there is no product image", async () => {
+    const result = await renderTemplate(
+      baseInput("avatar", { aspect: "1:1", brand: { ...brand, imageUrl: null } }),
+    );
+    expect(result.mimeType).toBe("image/png");
+    expect(result.buffer.subarray(0, 8)).toEqual(PNG_SIGNATURE);
+    expect(result.width).toBe(ASPECT_SIZES["1:1"].width);
+    expect(result.height).toBe(ASPECT_SIZES["1:1"].height);
+  }, 30_000);
+
+  it("renders banner (3:1) at 1500x500", async () => {
+    const result = await renderTemplate(baseInput("banner", { aspect: "3:1" }));
+    expect(result.mimeType).toBe("image/png");
+    expect(result.buffer.subarray(0, 8)).toEqual(PNG_SIGNATURE);
+    expect(result.width).toBe(1500);
+    expect(result.height).toBe(500);
+    expect(ASPECT_SIZES["3:1"]).toEqual({ width: 1500, height: 500 });
+  }, 30_000);
+
+  it("renders banner RTL (Hebrew) without throwing", async () => {
+    const result = await renderTemplate(
+      baseInput("banner", {
+        aspect: "3:1",
+        headline: "השקה השבוע",
+        businessName: "עסק לדוגמה",
+        brand: brandRtl,
+      }),
+    );
+    expect(result.buffer.subarray(0, 8)).toEqual(PNG_SIGNATURE);
+  }, 30_000);
+});
+
 describe("uploadMedia (local fallback)", () => {
   let dir: string;
   const originalEnv = { ...process.env };
