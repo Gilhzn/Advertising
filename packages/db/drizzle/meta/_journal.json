@@ -36,6 +36,13 @@
       "when": 1789145592332,
       "tag": "0004_optimal_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789164280993,
+      "tag": "0005_magenta_jackal",
+      "breakpoints": true
     }
   ]
 }

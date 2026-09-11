@@ -59,7 +59,8 @@ let boss: PgBoss | undefined;
 export async function getBoss(connectionString = process.env.DATABASE_URL): Promise<PgBoss> {
   if (boss) return boss;
   if (!connectionString) throw new Error("DATABASE_URL is not set");
-  boss = new PgBoss({ connectionString, schema: "pgboss" });
+  // PGBOSS_SCHEDULE=off disables pg-boss's cron supervisor (tick mode owns scheduling via worker_state).
+  boss = new PgBoss({ connectionString, schema: "pgboss", schedule: process.env.PGBOSS_SCHEDULE !== "off" });
   boss.on("error", (err: unknown) => console.error("[pg-boss]", err));
   await boss.start();
   return boss;
@@ -77,9 +78,17 @@ export async function enqueue<N extends JobName>(
   return b.send(name, data, { retryLimit: 3, retryBackoff: true, ...opts });
 }
 
-export async function stopBoss(): Promise<void> {
+/**
+ * Stops the shared pg-boss instance and clears the cached singleton (a later `getBoss()` starts a fresh
+ * one). `graceful` (default `true`) lets in-flight jobs finish before the pool closes - the short-lived
+ * tick runtime (`apps/worker/src/tick.ts`) passes it explicitly alongside a `timeout` so a run that hit
+ * its wall-clock cap still gives active handlers a bounded chance to complete instead of being killed
+ * mid-side-effect.
+ */
+export async function stopBoss(options: { graceful?: boolean; timeout?: number } = {}): Promise<void> {
   if (boss) {
-    await boss.stop({ graceful: true });
+    const { graceful = true, timeout } = options;
+    await boss.stop(timeout === undefined ? { graceful } : { graceful, timeout });
     boss = undefined;
   }
 }

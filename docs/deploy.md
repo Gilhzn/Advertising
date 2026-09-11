@@ -234,3 +234,124 @@ Run after every deploy to `worker`/`web`, in order:
    it from the dashboard) and confirm the mailbox moves `pending_dns -> provisioning -> active` (or its
    DNS records show as verified) - confirms the Cloudflare/Migadu credentials and `verify_mailbox_dns`'s
    self-rescheduling are both working in this environment.
+
+## Worker as a GitHub Actions tick
+
+The always-on Railway `worker` above is one way to run the background side of this app. The other -
+useful when you do not want to pay for (or babysit) a 24/7 container - is `.github/workflows/worker-tick.yml`:
+a scheduled GitHub Actions job that runs `apps/worker` as a short-lived **tick** every 10 minutes against
+a remote Postgres (e.g. Neon), and then exits. This repo is public, so Actions minutes are free.
+
+`docs/deploy-vercel.md` is the end-to-end walkthrough of that setup (Vercel dashboard + Neon + this
+workflow, with the exact secrets to paste where); this section is the reference for how the tick itself
+behaves and why.
+
+```
+every 10 min   ┌──────────────────────────────────────────────┐
+GitHub cron ──▶ │ checkout → install → build → db:migrate →    │ ──▶ exits
+                │ pnpm -F @adv/worker tick:built               │
+                └───────────────────┬──────────────────────────┘
+                                    │ pg-boss queues + `worker_state`
+                                    ▼
+                          Neon Postgres (unpooled URL)
+```
+
+### What a tick does (and how it fakes having been running all along)
+
+`apps/worker/src/tick.ts` is the same worker as `main.ts` - same connectors, same
+`REGISTRATIONS` table (`apps/worker/src/registrations.ts`), same handlers - with three differences:
+
+1. **No HTTP `/health` server.** Nothing would poll it; the workflow run's own status is the health signal.
+2. **No `boss.schedule(...)`.** pg-boss's cron clock only advances while a process is alive, which a tick
+   is not. Instead it calls `enqueueMissedSchedules` (`apps/worker/src/lib/catch-up-schedules.ts`): for
+   each entry in `SCHEDULES` it computes with `cron-parser` the most recent occurrence at or before now,
+   compares it to `worker_state.value->>'lastFiredAt'` under the key `schedule:<job name>`, and enqueues
+   the job once (`singletonKey = <job name>`, empty payload) if the cron came due since the last tick -
+   then records that occurrence. A chain of ticks therefore fires every occurrence exactly once, even
+   when GitHub's scheduler delays a run. Leftover `pgboss.schedule` rows from a previous always-on worker
+   are harmless: nothing fires them unless a process is running pg-boss's timekeeper.
+   - **First run ever** (empty `worker_state`): `publish_due_posts` and `refresh_tokens` always run;
+     every other schedule records its last occurrence and only runs it if it is within the last 24h, so a
+     fresh install does not burst a week of daily/weekly jobs at once.
+3. **It drains and exits.** After registering the handlers it polls every 5s for runnable + active jobs
+   across our queues and exits when they have been zero for 30 consecutive seconds, or when
+   `TICK_MAX_MINUTES` (default 20) elapses - in which case it logs how many jobs are left for the next
+   tick. Either way it stops pg-boss **gracefully** (a bounded wait, so a handler is never killed
+   mid-publish) and exits 0; exit 1 is reserved for a boot failure. Jobs deliberately deferred into the
+   future (retry backoff, `verify_mailbox_dns` re-enqueueing itself 10 minutes out) never hold a tick
+   open - the next tick picks them up.
+
+Every run ends with one summary line, e.g.:
+
+```
+worker tick: done (max_minutes) in 12s
+  {"exitReason":"max_minutes","durationMs":12001,
+   "processed":{"refresh_tokens":1,"publish_due_posts":2,"publish_post":9},
+   "failed":{},"scheduled":["publish_due_posts","fetch_insights","refresh_tokens"],
+   "remaining":0,"deferred":0}
+```
+
+Run one locally against your own DB (no Actions needed): `TICK_MAX_MINUTES=0.2 pnpm -F @adv/worker tick`.
+
+### Cadence and the trade-off vs. the always-on worker
+
+| | Always-on worker (Railway) | GitHub Actions tick |
+|---|---|---|
+| `publish_due_posts` latency | ~1 minute (its cron) | up to ~10-12 minutes (tick cadence + boot) |
+| Cost | a 24/7 container | free on a public repo |
+| Long jobs | unbounded | must fit `TICK_MAX_MINUTES` (20) or resume next tick |
+| Reliability | pg-boss's own clock | GitHub's scheduler is best-effort and can delay or (rarely) skip a run; the catch-up logic makes a late tick harmless, and `workflow_dispatch` is the manual escape hatch |
+| `/health` | yes | no - watch the Actions run history instead |
+
+A post scheduled for 10:03 publishes at the next tick (~10:10), not at 10:03. If minute-level punctuality
+matters, run the always-on worker; otherwise the tick is the cheaper deployment. Do **not** run both
+against the same database expecting them to share work fairly - they can coexist safely (pg-boss's
+`FOR UPDATE SKIP LOCKED` fetch plus this repo's own claim patterns prevent double-processing), but the
+always-on worker's pg-boss clock and the tick's `worker_state` clock would then both fire the crons, which
+only wastes a few no-op runs but is pointless. Pick one.
+
+### Secrets and the guard step
+
+The workflow maps repository secrets into env and then **guards** on them in bash: a step with
+`id: guard` sets `enabled=true` only when both `DATABASE_URL` and `ANTHROPIC_API_KEY` are non-empty, and
+every following step is `if: steps.guard.outputs.enabled == 'true'`. A fork, or this repo before anyone
+configured it, therefore gets a green run that prints:
+
+```
+worker tick skipped: add DATABASE_URL and ANTHROPIC_API_KEY as repository secrets (see docs/deploy-vercel.md)
+```
+
+Set the secrets under **Settings → Secrets and variables → Actions**. The names match the env vars
+documented in the tables above, with two exceptions:
+
+- **`APP_REPO_GITHUB_TOKEN`** → exposed to the job as `GITHUB_TOKEN`. The `improve_app` job reads
+  `GITHUB_TOKEN`, but GitHub Actions reserves `secrets.GITHUB_TOKEN` for its own automatic, repo-scoped
+  token (which cannot reach a user's app repo), so the real PAT must be stored under a different secret
+  name and re-exported. Only needed if you use `improve_app`.
+- **`TICK_MAX_MINUTES`** is set in the workflow itself (`"20"`), not a secret.
+
+Required: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `TOKEN_ENCRYPTION_KEY`, `APP_URL`. Everything else
+(`R2_*`, `BLOB_READ_WRITE_TOKEN`, `CLOUDFLARE_*`, `EMAIL_PROVIDER`, `MIGADU_*`, `RESEND_API_KEY`,
+`POSTHOG_*`, the per-platform app credentials, `LATE_API_KEY`, `IMAGE_GEN_*`, `SUPERVISOR_MODEL`,
+`AI_MONTHLY_BUDGET_USD`) is optional and only unlocks the jobs that need it - an unset credential makes
+that one connector/job fail cleanly, never the tick.
+
+`NODE_ENV=production` is set on the tick step only, not job-wide: `pnpm install --frozen-lockfile` with
+`NODE_ENV=production` skips devDependencies, which the build (typescript, turbo, tsx) needs.
+
+### Triggering a tick manually
+
+**Actions → Worker tick → Run workflow** (the `workflow_dispatch` trigger). Useful right after setting
+the secrets, after a migration, or to flush a backlog without waiting for the next 10-minute slot.
+`concurrency: { group: worker-tick, cancel-in-progress: false }` means a manual run queues behind an
+in-flight tick instead of cancelling it mid-publish.
+
+### Neon note: use the unpooled connection string
+
+Point `DATABASE_URL` at Neon's **unpooled** (direct) connection string - the one without `-pooler` in the
+host - for both the worker/tick and `pnpm db:migrate`. pg-boss relies on session-level state (advisory
+locks, `LISTEN/NOTIFY`, temporary tables during its schema migration) that PgBouncer's transaction pooling
+breaks, and Drizzle's migrator runs DDL in a session transaction. The pooled URL is fine for `apps/web`'s
+short request-scoped queries. Neon's free tier also auto-suspends an idle database: the first query of a
+tick may take a few seconds to wake it, which is well inside the tick's budget but is why a tick's
+duration varies.

@@ -4,8 +4,10 @@ Every job name, payload schema and cron schedule lives in `packages/jobs/src/ind
 `SCHEDULES`) — that file is the single source of truth shared with `apps/web` (which enqueues jobs).
 Handlers here only validate against it and implement it; they never redefine a payload shape.
 
-All handlers are registered in `apps/worker/src/main.ts` via `boss.work(name, options, handler)`. Every
-handler receives a **batch** (`Job<Payload>[]`) even when `batchSize` is 1 — pg-boss always calls the
+All handlers are registered in `apps/worker/src/registrations.ts` (`REGISTRATIONS`) and wired up via
+`boss.work(name, options, handler)` by **both** worker entry points: `src/main.ts` (the always-on process)
+and `src/tick.ts` (the short-lived GitHub Actions tick - same handlers, no `boss.schedule` clock, see
+docs/deploy.md). Every handler receives a **batch** (`Job<Payload>[]`) even when `batchSize` is 1 — pg-boss always calls the
 work handler with an array — so every handler loops over `jobs`.
 
 ## General rules

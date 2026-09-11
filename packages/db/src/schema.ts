@@ -358,6 +358,21 @@ export const auditLog = pgTable(
   (t) => [index("audit_log_business_time").on(t.businessId, t.createdAt)],
 );
 
+/**
+ * Small key/value scratchpad for the worker runtime itself (not business data, never user-visible).
+ *
+ * Used by the GitHub Actions "tick" runtime (`apps/worker/src/tick.ts`), which is a short-lived process
+ * and therefore has no in-memory clock: `schedule:<job name>` rows hold `{ lastFiredAt }` so the next
+ * tick can tell which `SCHEDULES` entries came due while nothing was running
+ * (`apps/worker/src/lib/catch-up-schedules.ts`). The always-on worker (`main.ts`) does not use it - there
+ * pg-boss's own `schedule()` clock owns that state.
+ */
+export const workerState = pgTable("worker_state", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ---- relations ----
 export const businessesRelations = relations(businesses, ({ one, many }) => ({
   user: one(users, { fields: [businesses.userId], references: [users.id] }),
