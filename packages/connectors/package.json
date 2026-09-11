@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@adv/shared": "workspace:*",
-    "zod": "^4.1.0"
+    "zod": "^4.1.0",
+    "@atproto/api": "^0.13.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

@@ -1,0 +1,16 @@
+{
+  "id": "1289374650283746510",
+  "type": 0,
+  "channel_id": "199737254929760256",
+  "content": "Tiny robots that tidy your desk.\n\nhttps://acme.test/launch",
+  "author": {
+    "bot": true,
+    "id": "223704706495545344",
+    "username": "Acme Robotics Announcements",
+    "discriminator": "0000"
+  },
+  "attachments": [],
+  "embeds": [],
+  "timestamp": "2026-09-10T08:00:00.000000+00:00",
+  "webhook_id": "223704706495545344"
+}

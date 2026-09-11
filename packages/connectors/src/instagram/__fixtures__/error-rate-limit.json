@@ -1,0 +1,9 @@
+{
+  "error": {
+    "message": "(#9) The user is temporarily blocked from publishing",
+    "type": "OAuthException",
+    "code": 9,
+    "error_subcode": 2207042,
+    "fbtrace_id": "Dxxxxxxxxxxxxxxxxxxxxxx"
+  }
+}

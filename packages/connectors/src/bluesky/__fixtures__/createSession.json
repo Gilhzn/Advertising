@@ -1,0 +1,11 @@
+{
+  "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+  "didDoc": { "id": "did:plc:z72i7hdynmk6r22z27h6tvur" },
+  "handle": "acme.bsky.social",
+  "email": "hello@acme.test",
+  "emailConfirmed": true,
+  "emailAuthFactor": false,
+  "accessJwt": "eyJhbGciOiJFUzI1NksifQ.ACCESS.sig",
+  "refreshJwt": "eyJhbGciOiJFUzI1NksifQ.REFRESH.sig",
+  "active": true
+}

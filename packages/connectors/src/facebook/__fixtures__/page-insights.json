@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "name": "page_impressions_unique",
+      "period": "day",
+      "values": [
+        { "value": 4210, "end_time": "2026-09-09T07:00:00+0000" },
+        { "value": 3980, "end_time": "2026-09-10T07:00:00+0000" }
+      ],
+      "title": "Daily Total Reach",
+      "id": "104729384756102/insights/page_impressions_unique/day"
+    },
+    {
+      "name": "page_post_engagements",
+      "period": "day",
+      "values": [{ "value": 312, "end_time": "2026-09-10T07:00:00+0000" }],
+      "id": "104729384756102/insights/page_post_engagements/day"
+    },
+    {
+      "name": "page_fans",
+      "period": "day",
+      "values": [{ "value": 8123, "end_time": "2026-09-10T07:00:00+0000" }],
+      "id": "104729384756102/insights/page_fans/day"
+    }
+  ]
+}

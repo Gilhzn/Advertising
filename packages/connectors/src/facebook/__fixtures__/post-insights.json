@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "name": "post_impressions_unique",
+      "period": "lifetime",
+      "values": [{ "value": 1840 }],
+      "id": "104729384756102_122100000000000001/insights/post_impressions_unique/lifetime"
+    },
+    {
+      "name": "post_clicks",
+      "period": "lifetime",
+      "values": [{ "value": 97 }],
+      "id": "104729384756102_122100000000000001/insights/post_clicks/lifetime"
+    }
+  ]
+}

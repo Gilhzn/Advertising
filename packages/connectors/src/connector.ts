@@ -38,6 +38,12 @@ export interface PublishablePost {
     width?: number;
     height?: number;
   }>;
+  /**
+   * ISO timestamp the post should go live at. Only meaningful for connectors
+   * whose `capabilities.nativeSchedule` is true (Facebook Pages); everyone else
+   * ignores it and relies on the worker's scheduler.
+   */
+  scheduledAt?: string | null;
   /** already published? connectors must not re-post */
   externalId?: string | null;
   /** community target (subreddit name, channel id...) when ownership is community */
@@ -132,6 +138,15 @@ export interface Connector {
     input: AuthorizeInput,
   ): Promise<{ tokens: OAuthTokens; account: Partial<ConnectedAccount> }>;
   refresh?(tokens: OAuthTokens): Promise<OAuthTokens>;
+  /**
+   * Like `refresh`, but for platforms whose refresh needs account context that
+   * the tokens alone do not carry (Bluesky needs the PDS host, Meta needs the
+   * page id to re-derive a Page token). Callers should prefer this when present
+   * and fall back to `refresh`. Returns the tokens and any config that changed.
+   */
+  refreshForAccount?(
+    account: ConnectedAccount,
+  ): Promise<{ tokens: OAuthTokens; config?: Record<string, unknown> }>;
 
   /** Token/webhook flows: validate pasted inputs and return the account identity + config to store. */
   connectWithInputs?(

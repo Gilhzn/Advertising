@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "result": {
+    "status": "member",
+    "user": {
+      "id": 7654321,
+      "is_bot": true,
+      "first_name": "Advertising",
+      "username": "advertising_engine_bot"
+    }
+  }
+}

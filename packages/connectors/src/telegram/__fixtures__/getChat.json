@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "result": {
+    "id": -1001234567890,
+    "type": "channel",
+    "title": "Acme Robotics",
+    "username": "acmerobotics",
+    "description": "Tiny robots that tidy your desk.",
+    "invite_link": "https://t.me/acmerobotics",
+    "accent_color_id": 3,
+    "max_reaction_count": 11
+  }
+}

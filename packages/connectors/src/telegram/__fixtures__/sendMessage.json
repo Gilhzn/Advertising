@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "result": {
+    "message_id": 4711,
+    "sender_chat": {
+      "id": -1001234567890,
+      "title": "Acme Robotics",
+      "username": "acmerobotics",
+      "type": "channel"
+    },
+    "chat": { "id": -1001234567890, "title": "Acme Robotics", "username": "acmerobotics", "type": "channel" },
+    "date": 1789000000,
+    "text": "Tiny robots that tidy your desk."
+  }
+}

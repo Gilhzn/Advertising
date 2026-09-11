@@ -1,0 +1,9 @@
+{
+  "error": {
+    "message": "(#100) The value must be a valid insights metric",
+    "type": "OAuthException",
+    "code": 100,
+    "error_subcode": 2635,
+    "fbtrace_id": "Cxxxxxxxxxxxxxxxxxxxxxx"
+  }
+}

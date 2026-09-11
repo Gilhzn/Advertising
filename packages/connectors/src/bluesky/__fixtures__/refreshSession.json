@@ -1,0 +1,7 @@
+{
+  "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+  "handle": "acme.bsky.social",
+  "accessJwt": "eyJhbGciOiJFUzI1NksifQ.ACCESS2.sig",
+  "refreshJwt": "eyJhbGciOiJFUzI1NksifQ.REFRESH2.sig",
+  "active": true
+}

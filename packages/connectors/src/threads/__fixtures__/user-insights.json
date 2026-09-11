@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "name": "views",
+      "period": "day",
+      "values": [{ "value": 41000, "end_time": "2026-09-10T07:00:00+0000" }],
+      "id": "7148706561864030/insights/views/day"
+    },
+    {
+      "name": "likes",
+      "period": "lifetime",
+      "total_value": { "value": 1902 },
+      "id": "7148706561864030/insights/likes/lifetime"
+    },
+    {
+      "name": "replies",
+      "period": "lifetime",
+      "total_value": { "value": 210 },
+      "id": "7148706561864030/insights/replies/lifetime"
+    },
+    {
+      "name": "reposts",
+      "period": "lifetime",
+      "total_value": { "value": 88 },
+      "id": "7148706561864030/insights/reposts/lifetime"
+    },
+    {
+      "name": "quotes",
+      "period": "lifetime",
+      "total_value": { "value": 15 },
+      "id": "7148706561864030/insights/quotes/lifetime"
+    },
+    {
+      "name": "followers_count",
+      "period": "lifetime",
+      "total_value": { "value": 3140 },
+      "id": "7148706561864030/insights/followers_count/lifetime"
+    }
+  ]
+}

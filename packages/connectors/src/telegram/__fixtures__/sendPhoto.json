@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "result": {
+    "message_id": 4712,
+    "chat": { "id": -1001234567890, "title": "Acme Robotics", "username": "acmerobotics", "type": "channel" },
+    "date": 1789000100,
+    "photo": [
+      { "file_id": "AgACAgQAAx0", "file_unique_id": "AQADu", "file_size": 1234, "width": 320, "height": 168 },
+      {
+        "file_id": "AgACAgQAAx1",
+        "file_unique_id": "AQADv",
+        "file_size": 45678,
+        "width": 1200,
+        "height": 630
+      }
+    ],
+    "caption": "Tiny robots that tidy your desk."
+  }
+}

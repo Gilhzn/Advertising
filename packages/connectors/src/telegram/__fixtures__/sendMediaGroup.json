@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "message_id": 4713,
+      "chat": {
+        "id": -1001234567890,
+        "title": "Acme Robotics",
+        "username": "acmerobotics",
+        "type": "channel"
+      },
+      "date": 1789000200,
+      "media_group_id": "13500000000000000",
+      "photo": [
+        {
+          "file_id": "AgACAgQAAx2",
+          "file_unique_id": "AQADw",
+          "file_size": 45678,
+          "width": 1200,
+          "height": 630
+        }
+      ]
+    },
+    {
+      "message_id": 4714,
+      "chat": {
+        "id": -1001234567890,
+        "title": "Acme Robotics",
+        "username": "acmerobotics",
+        "type": "channel"
+      },
+      "date": 1789000200,
+      "media_group_id": "13500000000000000",
+      "photo": [
+        {
+          "file_id": "AgACAgQAAx3",
+          "file_unique_id": "AQADx",
+          "file_size": 43210,
+          "width": 1200,
+          "height": 630
+        }
+      ]
+    }
+  ]
+}

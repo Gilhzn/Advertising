@@ -1,0 +1,6 @@
+{
+  "status": 429,
+  "serviceErrorCode": 0,
+  "code": "RATE_LIMIT_EXCEEDED",
+  "message": "Request exceeded the daily call quota for this member"
+}

@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "name": "reach",
+      "period": "day",
+      "values": [
+        { "value": 5120, "end_time": "2026-09-09T07:00:00+0000" },
+        { "value": 6240, "end_time": "2026-09-10T07:00:00+0000" }
+      ],
+      "title": "Accounts reached",
+      "id": "17841400000000001/insights/reach/day"
+    },
+    {
+      "name": "follower_count",
+      "period": "day",
+      "values": [{ "value": 54, "end_time": "2026-09-10T07:00:00+0000" }],
+      "id": "17841400000000001/insights/follower_count/day"
+    },
+    {
+      "name": "profile_views",
+      "period": "day",
+      "values": [{ "value": 311, "end_time": "2026-09-10T07:00:00+0000" }],
+      "id": "17841400000000001/insights/profile_views/day"
+    }
+  ]
+}

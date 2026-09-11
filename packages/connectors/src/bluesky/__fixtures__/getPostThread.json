@@ -1,0 +1,16 @@
+{
+  "thread": {
+    "$type": "app.bsky.feed.defs#threadViewPost",
+    "post": {
+      "uri": "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3kv7yqmrjkk2c",
+      "cid": "bafyreigx6ywqbmh2ktwlwqpyzx7a4xkrvg6aqkkqxvhb5c2dgtgmwzqbye",
+      "author": { "did": "did:plc:z72i7hdynmk6r22z27h6tvur", "handle": "acme.bsky.social" },
+      "record": { "$type": "app.bsky.feed.post", "text": "Hello", "createdAt": "2026-09-10T08:00:00.000Z" },
+      "replyCount": 4,
+      "repostCount": 11,
+      "likeCount": 37,
+      "quoteCount": 2,
+      "indexedAt": "2026-09-10T08:00:01.000Z"
+    }
+  }
+}

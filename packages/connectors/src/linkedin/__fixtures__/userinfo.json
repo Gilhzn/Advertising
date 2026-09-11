@@ -1,0 +1,10 @@
+{
+  "sub": "Xy9AbCdEfG",
+  "email_verified": true,
+  "name": "Dana Cohen",
+  "locale": { "country": "US", "language": "en" },
+  "given_name": "Dana",
+  "family_name": "Cohen",
+  "email": "dana@acme.test",
+  "picture": "https://media.licdn.com/dms/image/v2/acme"
+}

@@ -1,0 +1,5 @@
+{
+  "status": 422,
+  "code": "DUPLICATE_POST",
+  "message": "Duplicate post detected: a post with identical content was created recently"
+}
