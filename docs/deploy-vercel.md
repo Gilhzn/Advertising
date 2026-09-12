@@ -10,8 +10,12 @@ branch redeploys the dashboard automatically, and the worker keeps ticking on it
 ## 1. Vercel project (dashboard)
 
 1. https://vercel.com/new → **Import** `Gilhzn/Advertising` (authorize the GitHub app if asked).
-2. **Root Directory**: `apps/web` (click *Edit* next to the root directory and pick `apps/web`).
-   `apps/web/vercel.json` already sets the install/build commands for the monorepo.
+2. **Root Directory**: `apps/web` — this is the step people miss. In the import screen the field shows
+   `./` by default; click **Edit** next to it and pick `apps/web`. (Existing project: Settings → General →
+   Root Directory → `apps/web` → Save → Redeploy.) If it stays `./`, the build fails on purpose within
+   seconds with the message "this Vercel project must use Root Directory = apps/web".
+   `apps/web/vercel.json` sets the monorepo install/build commands (only the dashboard's workspace
+   dependencies are installed, so the build is fast).
 3. **Production Branch**: `claude/multi-platform-business-promotion-nq9iea` (Settings → Git after the
    first import), or merge that branch into `main` first.
 4. Do not deploy yet — add storage and variables first (steps 2 and 3), then **Deploy**.
@@ -81,6 +85,9 @@ and exits. Posting precision is therefore ~10 minutes; switch to the always-on w
   user; if you host the worker elsewhere, run it as a regular user.
 
 ## Troubleshooting
+
+- Build fails and the log is cut off: click the copy icon next to "N lines" in Build Logs and paste the
+  last lines; the "Summary" section shows the failing command.
 
 - Build fails on Vercel with a Postgres error: `DATABASE_URL` missing at build time → connect Neon first.
 - "Uploads need a storage backend": connect Blob or set `R2_*`.

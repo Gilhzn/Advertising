@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -45,6 +46,8 @@ const nextConfig: NextConfig = {
   // `@adv/media`'s satori renderer reads its vendored fonts from disk at runtime
   // (`packages/media/fonts/*.ttf`); the default file trace misses them since nothing
   // statically imports the binary files.
+  // Monorepo: trace workspace packages from the repo root so Vercel bundles them.
+  outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
   outputFileTracingIncludes: {
     "/**": ["../../packages/media/fonts/**"],
   },

@@ -12,7 +12,21 @@ export function createDb(url = process.env.DATABASE_URL) {
   return drizzle(client, { schema });
 }
 
+/**
+ * Shared client. Created lazily on first *use* (not on first call), so modules may hold a `getDb()`
+ * reference at import time - e.g. during `next build` page-data collection - without a DATABASE_URL.
+ */
 export function getDb(): Db {
-  if (!cached) cached = createDb();
-  return cached;
+  if (cached) return cached;
+  if (process.env.DATABASE_URL) {
+    cached = createDb();
+    return cached;
+  }
+  return new Proxy({} as Db, {
+    get(_target, prop) {
+      if (!cached) cached = createDb();
+      const value = (cached as unknown as Record<PropertyKey, unknown>)[prop];
+      return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(cached) : value;
+    },
+  });
 }

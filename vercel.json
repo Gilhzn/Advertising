@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "echo 'skipping install: wrong Root Directory'",
+  "buildCommand": "echo '' && echo 'ERROR: this Vercel project must use Root Directory = apps/web (Project Settings -> General -> Root Directory). See docs/deploy-vercel.md.' && echo '' && exit 1"
+}

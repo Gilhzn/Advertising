@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.268
-        version: 0.3.268(@anthropic-ai/sdk@0.125.0(zod@4.6.2))(@modelcontextprotocol/sdk@1.30.0(zod@4.6.2))(zod@4.6.2)
       '@biomejs/biome':
         specifier: ^2.3.0
         version: 2.5.13
