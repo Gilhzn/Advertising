@@ -36,13 +36,17 @@ branch redeploys the dashboard automatically, and the worker keeps ticking on it
 | `TOKEN_ENCRYPTION_KEY` | `openssl rand -hex 32` (64 hex chars; **the same value must be used by the worker**) |
 | `APP_URL` | `https://<your-project>.vercel.app` (set after the first deploy, then redeploy) |
 | `OWNER_EMAIL` | your login email |
-| `OWNER_PASSWORD_HASH` | output of `pnpm owner:hash '<your password>'` (run locally). Quick alternative: `OWNER_PASSWORD=<plain>` |
+| `OWNER_PASSWORD` | the password you want to sign in with. Quickest path - nothing to run locally. |
+| `OWNER_PASSWORD_HASH` | optional hardening instead of `OWNER_PASSWORD`: run `pnpm owner:hash '<your password>'` locally and paste the result. |
 | `ANTHROPIC_API_KEY` | only needed on Vercel if you enable image generation or direct API calls from the dashboard; the agents run in the worker |
 | Platform apps (optional) | `META_APP_ID/SECRET`, `THREADS_APP_ID/SECRET`, `LINKEDIN_CLIENT_ID/SECRET`, `X_CLIENT_ID/SECRET`, `REDDIT_*`, `TIKTOK_*`, `GOOGLE_*`, `PINTEREST_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` - needed for the wizard's OAuth/token steps of each platform |
 | `POSTHOG_HOST`, `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_ORG_ID` | optional, product analytics |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, `EMAIL_PROVIDER`, `MIGADU_*`, `RESEND_API_KEY` | optional, business mailbox |
 
 OAuth redirect URIs to register in each platform's developer console: `https://<your-project>.vercel.app/api/oauth/<platform>/callback`.
+
+The sign-in page doubles as a setup screen: until a sign-in provider exists it lists exactly which
+of these variables are still missing (names only, never values).
 
 Then **Deploy**. The build runs `pnpm db:migrate` against Neon, so the schema is always current.
 Open `https://<your-project>.vercel.app/login` and sign in with `OWNER_EMAIL` + your password.

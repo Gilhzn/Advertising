@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { devSignInAction, magicLinkSignInAction, ownerSignInAction } from "@/lib/actions/auth";
 import { isOwnerLoginEnabled } from "@/lib/owner-auth";
+import { missingRequiredEnv } from "@/lib/setup-status";
 
 const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: "Too many attempts. Wait 15 minutes and try again.",
@@ -20,6 +21,8 @@ export default async function LoginPage({
   const isDev = process.env.NODE_ENV !== "production" && process.env.ENABLE_DEV_LOGIN === "1";
   const resendEnabled = Boolean(process.env.RESEND_API_KEY);
   const ownerLoginEnabled = isOwnerLoginEnabled();
+  // Only computed for the setup screen below, which renders solely when no provider exists.
+  const setupGaps = ownerLoginEnabled || isDev || resendEnabled ? [] : missingRequiredEnv();
 
   const errorMessage = error ? (code && ERROR_MESSAGES[code]) || "Sign-in failed. Try again." : null;
 
@@ -84,10 +87,42 @@ export default async function LoginPage({
           ) : null}
 
           {!ownerLoginEnabled && !isDev && !resendEnabled ? (
-            <p className="text-sm text-muted-foreground">
-              No sign-in provider is configured. Set OWNER_EMAIL + OWNER_PASSWORD_HASH (see{" "}
-              <code>pnpm owner:hash</code>), or RESEND_API_KEY for magic-link login.
-            </p>
+            <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-col gap-2">
+                <p className="font-medium text-foreground">Finish setting up this deployment</p>
+                <p>
+                  No sign-in provider is configured yet. Add these two environment variables, then redeploy:
+                </p>
+                <ul className="flex flex-col gap-1">
+                  <li>
+                    <code>OWNER_EMAIL</code> - the email you will sign in with
+                  </li>
+                  <li>
+                    <code>OWNER_PASSWORD</code> - the password you choose
+                  </li>
+                </ul>
+                <p>
+                  On Vercel: Settings - Environment Variables, then Deployments - Redeploy. To avoid storing
+                  the password in plain text, set <code>OWNER_PASSWORD_HASH</code> instead (run{" "}
+                  <code>pnpm owner:hash</code> locally). <code>RESEND_API_KEY</code> enables magic-link
+                  sign-in as an alternative.
+                </p>
+              </div>
+
+              {setupGaps.length > 0 ? (
+                <div className="flex flex-col gap-2 border-t border-border pt-4">
+                  <p className="font-medium text-foreground">Also still missing</p>
+                  <ul className="flex flex-col gap-2">
+                    {setupGaps.map((item) => (
+                      <li key={item.name}>
+                        <code>{item.name}</code>
+                        <span className="block text-xs">{item.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </CardContent>
       </Card>
