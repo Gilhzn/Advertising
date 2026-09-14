@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { BLOCKED_HOST_SUFFIXES, blockedIpReason, type PlatformId } from "@adv/shared";
+import type { PlatformId } from "@adv/shared";
+import { BLOCKED_HOST_SUFFIXES, blockedIpReason } from "@adv/shared/ip-guard";
 import { type PinnedAddress, pinnedFetch } from "@adv/shared/pinned-fetch";
 import { ConnectorError } from "./connector.js";
 
@@ -17,7 +18,7 @@ import { ConnectorError } from "./connector.js";
  * `https://[::ffff:a9fe:a9fe]/` - the cloud metadata endpoint written in hex - passed the guard.
  * There is now one shared implementation in `@adv/shared` that both SSRF guards call.
  */
-export { blockedIpReason } from "@adv/shared";
+export { blockedIpReason } from "@adv/shared/ip-guard";
 
 /** Kept as a named export because callers and tests import it from here. */
 export function isBlockedIp(ip: string): boolean {

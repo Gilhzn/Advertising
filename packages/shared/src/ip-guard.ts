@@ -9,6 +9,9 @@ import { isIP } from "node:net";
  * 169.254.169.254, the cloud metadata endpoint - passed straight through it. Expanding the address
  * into its eight groups before classifying is the only way to get this right, so there is now one
  * implementation and both guards call it.
+ *
+ * Behind the `@adv/shared/ip-guard` subpath rather than the package root: it imports `node:net`, and
+ * the root index reaches client components in the dashboard, where bundling a node builtin fails.
  */
 
 /** Host suffixes that never belong to a public host, whatever DNS says. */

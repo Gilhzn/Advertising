@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { blockedIpReason } from "@adv/shared";
+import { blockedIpReason } from "@adv/shared/ip-guard";
 
 // Re-exported so the existing tests and callers keep importing it from here; the implementation
 // now lives in @adv/shared so the connector SSRF guard uses the exact same classifier.

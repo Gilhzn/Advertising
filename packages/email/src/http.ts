@@ -1,4 +1,4 @@
-import { logger as defaultLogger, type Logger } from "@adv/shared";
+import { logger as defaultLogger, type Logger, redactSecrets } from "@adv/shared";
 import { EmailProviderError, type EmailProviderName } from "./errors.js";
 
 export interface JsonRequestOptions {
@@ -133,7 +133,14 @@ function backoffMs(attempt: number): number {
   return Math.min(2000, 200 * 2 ** attempt);
 }
 
+/**
+ * Provider response bodies land in `EmailProviderError.message`, which `provisionMailbox` writes to
+ * `mailboxes.last_error` - a column the dashboard renders. Migadu and Cloudflare echo request
+ * context in their error bodies, so 300 raw characters of one could carry an API key or a mailbox
+ * password. Redact before truncating, so a secret cannot be half-cut and still readable.
+ */
 function truncate(text: string, max = 300): string {
+  text = redactSecrets(text);
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 

@@ -13,6 +13,10 @@
     "./pinned-fetch": {
       "types": "./dist/pinned-fetch.d.ts",
       "default": "./dist/pinned-fetch.js"
+    },
+    "./ip-guard": {
+      "types": "./dist/ip-guard.d.ts",
+      "default": "./dist/ip-guard.js"
     }
   },
   "scripts": {
