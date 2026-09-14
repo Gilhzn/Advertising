@@ -100,3 +100,22 @@ export function pinnedFetchFor(addresses: PinnedAddress[]): typeof fetch {
   const first = addresses[0];
   return first ? pinnedFetch(first) : fetch;
 }
+
+/**
+ * Returns `raw` when it is an http(s) URL, otherwise null.
+ *
+ * Used at every boundary where a URL we did not construct gets STORED and later rendered as an
+ * `href`: `PublishResult.url` comes straight out of a third-party API response, and the assisted
+ * connectors take whatever the user pastes. `new URL()` happily parses `javascript:alert(1)`, so
+ * parsing was never the check - the scheme is. This is a cheap syntactic filter, not the SSRF
+ * guard: nothing is fetched from these URLs.
+ */
+export function safeHttpUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}

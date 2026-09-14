@@ -28,6 +28,16 @@ async function main(): Promise<void> {
   }
   logger.info({ queues: Object.keys(JOBS) }, "worker: queues ensured");
 
+  // PGBOSS_SCHEDULE=off disables pg-boss's cron supervisor. That is correct for the tick runtime,
+  // which drives schedules itself - but in the always-on worker it meant `boss.schedule` rows landed
+  // and never fired, while this still logged "schedules registered" and /health stayed green.
+  // Publishing, insights, token refresh and autopilot would all stop, silently. Fail loudly instead.
+  if (process.env.PGBOSS_SCHEDULE === "off") {
+    throw new Error(
+      "PGBOSS_SCHEDULE=off is only valid for the tick runtime (src/tick.ts). The always-on worker " +
+        "needs pg-boss's scheduler; with it off, no cron job would ever run.",
+    );
+  }
   for (const { name, cron } of SCHEDULES) {
     await boss.schedule(name, cron, {}, { tz: "UTC" });
   }

@@ -60,12 +60,21 @@ export async function updateBrandKitAction(
   await assertOwnership(businessId);
   const db = getDb();
 
+  // `base` is a bound server-action argument, which means it arrives from the client and is fully
+  // attacker-controlled by anyone who can reach this action. It used to be spread straight into the
+  // row, so any JSON at all could be written into `brand_kits.data` - a store the strategist and
+  // copywriter agents read back and put into prompts. Validate it against the schema first, and
+  // validate the result again after merging the form fields in.
+  const parsedBase = BrandKitSchema.safeParse(base);
+  if (!parsedBase.success) return { error: "That brand kit is not valid." };
+  const safeBase = parsedBase.data;
+
   const handleSuggestions = String(formData.get("handleSuggestions") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const bios: BrandKit["bios"] = { ...base.bios };
+  const bios: BrandKit["bios"] = { ...safeBase.bios };
   for (const platform of Object.keys(bios)) {
     const short = formData.get(`bio_short_${platform}`);
     const long = formData.get(`bio_long_${platform}`);
@@ -75,11 +84,14 @@ export async function updateBrandKitAction(
     };
   }
 
-  const nextData: BrandKit = {
-    ...base,
-    handleSuggestions: handleSuggestions.length > 0 ? handleSuggestions : base.handleSuggestions,
+  const merged: BrandKit = {
+    ...safeBase,
+    handleSuggestions: handleSuggestions.length > 0 ? handleSuggestions : safeBase.handleSuggestions,
     bios,
   };
+  const parsedNext = BrandKitSchema.safeParse(merged);
+  if (!parsedNext.success) return { error: "Those brand kit values are not valid." };
+  const nextData = parsedNext.data;
 
   const [latest] = await db
     .select()

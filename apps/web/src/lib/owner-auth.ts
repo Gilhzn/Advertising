@@ -51,10 +51,22 @@ function verifyScryptHash(password: string, stored: string): boolean {
 // that is persisted.
 const FIXED_COMPARISON_SALT = Buffer.from("adv-owner-login-fixed-comparison-salt-v1");
 
+// The expected side is derived from a value that does not change during the process's life, so
+// hashing it on every attempt just doubled the scrypt work an unauthenticated request could force
+// the server to do (~53ms became ~106ms, halving the requests needed to saturate a Vercel function).
+// Cached by the plaintext it was derived from, so a changed env var is still picked up.
+let plainComparisonCache: { plain: string; expected: Buffer } | null = null;
+
+function expectedForPlain(plain: string): Buffer {
+  if (plainComparisonCache?.plain === plain) return plainComparisonCache.expected;
+  const expected = scrypt(plain, FIXED_COMPARISON_SALT, KEY_BYTES);
+  plainComparisonCache = { plain, expected };
+  return expected;
+}
+
 function verifyPlainPassword(password: string, plain: string): boolean {
   const actual = scrypt(password, FIXED_COMPARISON_SALT, KEY_BYTES);
-  const expected = scrypt(plain, FIXED_COMPARISON_SALT, KEY_BYTES);
-  return timingSafeEqual(actual, expected);
+  return timingSafeEqual(actual, expectedForPlain(plain));
 }
 
 /**
@@ -65,6 +77,29 @@ export function verifyPassword(password: string, stored: string): boolean {
   if (!stored) return false;
   if (stored.startsWith(`${SCRYPT_PREFIX}$`)) return verifyScryptHash(password, stored);
   return verifyPlainPassword(password, stored);
+}
+
+/**
+ * Verifies email AND password while always doing the password work.
+ *
+ * The call site used to be `email === ownerEmail && verifyPassword(...)`, and `&&` short-circuits:
+ * a wrong email skipped scrypt entirely and answered in about 53ms less than a right email with a
+ * wrong password. That is a reliable oracle for "which address is the owner". Both halves are now
+ * always evaluated and combined without short-circuiting.
+ */
+export function verifyOwnerCredentials(email: string, password: string): boolean {
+  const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  const emailMatches = email.length > 0 && ownerEmail.length > 0 && timingSafeEqualString(email, ownerEmail);
+  // Not `&&`: the scrypt comparison runs whatever the email was.
+  const passwordMatches = verifyPassword(password, ownerPasswordCredential());
+  return emailMatches && passwordMatches;
+}
+
+function timingSafeEqualString(a: string, b: string): boolean {
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
 }
 
 /** Owner-password login is available once an email and either a hash or a plain password is set. */
@@ -100,8 +135,24 @@ export interface LoginAttemptCheck {
   retryAfterMs: number;
 }
 
+// A per-IP bucket alone is defeated by rotating the source address, and behind a proxy the address
+// we see is only as trustworthy as the proxy. This second, address-independent bucket puts a hard
+// ceiling on total failed owner-login attempts per window, so IP rotation buys an attacker nothing
+// beyond it. Sized well above what a human mistyping their password reaches.
+const MAX_GLOBAL_FAILURES = 50;
+let globalFailures = 0;
+let globalWindowStartedAt = 0;
+
+function globalAllowed(now: number): boolean {
+  if (now - globalWindowStartedAt > WINDOW_MS) return true;
+  return globalFailures < MAX_GLOBAL_FAILURES;
+}
+
 /** Has this IP exceeded `MAX_FAILURES` failed attempts within the current `WINDOW_MS`? */
 export function checkLoginAttempt(ip: string, now: number = Date.now()): LoginAttemptCheck {
+  if (!globalAllowed(now)) {
+    return { allowed: false, retryAfterMs: WINDOW_MS - (now - globalWindowStartedAt) };
+  }
   const state = attemptsByIp.get(ip);
   if (!state) return { allowed: true, retryAfterMs: 0 };
   const elapsed = now - state.windowStartedAt;
@@ -117,6 +168,12 @@ export function checkLoginAttempt(ip: string, now: number = Date.now()): LoginAt
 
 /** Record a failed attempt, starting (or continuing) the 15-minute window for this IP. */
 export function recordLoginFailure(ip: string, now: number = Date.now()): void {
+  if (now - globalWindowStartedAt > WINDOW_MS) {
+    globalWindowStartedAt = now;
+    globalFailures = 1;
+  } else {
+    globalFailures += 1;
+  }
   const state = attemptsByIp.get(ip);
   if (!state || now - state.windowStartedAt > WINDOW_MS) {
     attemptsByIp.set(ip, { failures: 1, windowStartedAt: now });
@@ -133,4 +190,7 @@ export function recordLoginSuccess(ip: string): void {
 /** Test-only: clear all rate-limiter state so tests don't leak into each other. */
 export function __resetLoginAttemptsForTests(): void {
   attemptsByIp.clear();
+  globalFailures = 0;
+  globalWindowStartedAt = 0;
+  plainComparisonCache = null;
 }

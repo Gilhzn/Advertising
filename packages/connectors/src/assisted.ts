@@ -11,6 +11,7 @@ import {
   type VerifyResult,
   type WizardStep,
 } from "./connector.js";
+import { safeHttpUrl } from "./net-guard.js";
 
 /**
  * Assisted platforms have **no posting API at all** (Product Hunt, Hacker News,
@@ -139,10 +140,9 @@ export function createAssistedConnector(spec: AssistedConnectorSpec): Connector 
     async connectWithInputs(inputs: Record<string, string>) {
       const raw = (inputs.profileUrl ?? "").trim();
       if (raw) {
-        try {
-          // eslint-disable-next-line no-new
-          new URL(raw);
-        } catch {
+        // `new URL()` alone parses `javascript:alert(1)` quite happily, and this value is stored as
+        // `config.profileUrl` and rendered as an href, so the scheme is the check that matters.
+        if (!safeHttpUrl(raw)) {
           throw new ConnectorError(
             `"${raw}" is not a valid URL. Paste the full address including https://`,
             spec.platform,

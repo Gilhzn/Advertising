@@ -84,6 +84,17 @@ async function createDraft(d: PostDraft, extra: Record<string, unknown> = {}) {
   return callEngineTool(server, "create_post_draft", { post: d, ...extra });
 }
 
+/**
+ * A draft that has been through the compliance guard, which is the only state `schedule_post` will
+ * accept. The guard used to be a prompt instruction with nothing behind it, so these tests could
+ * schedule a post that had never been checked.
+ */
+async function createCheckedDraft(d: PostDraft, extra: Record<string, unknown> = {}) {
+  const created = await createDraft(d, extra);
+  await callEngineTool(server, "check_compliance", { postId: String(created.data.postId) });
+  return created;
+}
+
 describe("create_post_draft text limits", () => {
   it("accepts a draft that fits the platform limit", async () => {
     const res = await createDraft(draft({ platform: "bluesky" }));
@@ -123,7 +134,7 @@ describe("create_post_draft text limits", () => {
 
 describe("schedule_post approval logic", () => {
   it("approves a post on an owned account", async () => {
-    const created = await createDraft(draft({ platform: "bluesky", body: "Owned account post." }));
+    const created = await createCheckedDraft(draft({ platform: "bluesky", body: "Owned account post." }));
     const postId = String(created.data.postId);
     const res = await callEngineTool(server, "schedule_post", { postId, scheduledAt: soon() });
     expect(res.isError).toBe(false);
@@ -143,7 +154,7 @@ describe("schedule_post approval logic", () => {
     expect(community).toBeDefined();
     expect(community?.approvalRequired).toBe(true);
 
-    const created = await createDraft(draft({ platform: "bluesky", body: "Community post." }), {
+    const created = await createCheckedDraft(draft({ platform: "bluesky", body: "Community post." }), {
       communityId: community!.id,
     });
     expect(created.data.requiresHumanApproval).toBe(true);
@@ -156,7 +167,7 @@ describe("schedule_post approval logic", () => {
   });
 
   it("holds a post whose only account has ownership=community", async () => {
-    const created = await createDraft(
+    const created = await createCheckedDraft(
       draft({ platform: "discord", body: "Posted through a community-owned Discord account." }),
     );
     const postId = String(created.data.postId);
@@ -183,8 +194,24 @@ describe("schedule_post approval logic", () => {
     expect(after?.scheduledAt).toBeNull();
   });
 
+  it("refuses to schedule a post that never went through check_compliance", async () => {
+    // This was the hole: the verdict was selected in schedulingDecision and never read, and the only
+    // compliance-derived gate was `status === "rejected"` - which check_compliance sets itself. So
+    // create_post_draft -> schedule_post, skipping the check, produced an approved post.
+    const created = await createDraft(draft({ platform: "bluesky", body: "Unchecked post." }));
+    const postId = String(created.data.postId);
+    const res = await callEngineTool(server, "schedule_post", { postId, scheduledAt: soon() });
+    expect(res.isError).toBe(true);
+    expect(String(res.data.error)).toMatch(/check_compliance/);
+    const [row] = await db.select().from(posts).where(eq(posts.id, postId));
+    expect(row?.status).toBe("draft");
+    expect(row?.scheduledAt).toBeNull();
+  });
+
   it("refuses to schedule an image-only platform before media is attached", async () => {
-    const created = await createDraft(draft({ platform: "instagram", body: "Caption without media yet." }));
+    const created = await createCheckedDraft(
+      draft({ platform: "instagram", body: "Caption without media yet." }),
+    );
     const postId = String(created.data.postId);
     const blocked = await callEngineTool(server, "schedule_post", { postId, scheduledAt: soon() });
     expect(blocked.isError).toBe(true);
@@ -275,8 +302,25 @@ describe("PreToolUse schedule guard", () => {
     expect(specific?.permissionDecisionReason).toMatch(/not found/);
   });
 
+  it("the PreToolUse guard denies the same unchecked post", async () => {
+    const created = await createDraft(draft({ platform: "bluesky", body: "Unchecked, via the hook." }));
+    const guard = makeScheduleGuard({ businessId: biz.businessId, runId, db, agentName: "supervisor" });
+    const out = await guard(
+      hookInput({ postId: String(created.data.postId), scheduledAt: soon() }),
+      undefined,
+      { signal: new AbortController().signal },
+    );
+    const specific = (
+      out as { hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string } }
+    ).hookSpecificOutput;
+    expect(specific?.permissionDecision).toBe("deny");
+    expect(specific?.permissionDecisionReason).toMatch(/check_compliance/);
+  });
+
   it("allows a legitimate call and says what will happen", async () => {
-    const created = await createDraft(draft({ platform: "bluesky", body: "A normal owned-account post." }));
+    const created = await createCheckedDraft(
+      draft({ platform: "bluesky", body: "A normal owned-account post." }),
+    );
     const guard = makeScheduleGuard({ businessId: biz.businessId, runId, db, agentName: "supervisor" });
     const out = await guard(
       hookInput({ postId: String(created.data.postId), scheduledAt: soon() }),

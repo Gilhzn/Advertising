@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { auditLog, type Db } from "@adv/db";
-import { logger } from "@adv/shared";
+import { logger, redactDeep } from "@adv/shared";
 import type { HookCallback, HookCallbackMatcher, HookEvent } from "@anthropic-ai/claude-agent-sdk";
 import { engineToolName, schedulingDecision } from "./tools/engine.js";
 
@@ -94,7 +94,11 @@ export function makeAuditLogger(ctx: HookContext): HookCallback {
         actor: `agent:${ctx.agentName}`,
         action: `tool:${input.tool_name}`,
         target,
-        payload: {
+        // redactDeep, exactly as the worker's writeAudit does. Tool input is model output: a
+        // fetch_url the model built with a token in the query string, or an argument it copied out
+        // of a page it read, lands here verbatim otherwise - and audit_log is readable from the
+        // dashboard.
+        payload: redactDeep({
           runId: ctx.runId,
           toolUseId: input.tool_use_id,
           input: JSON.stringify(toolInput).slice(0, 4000),
@@ -102,7 +106,7 @@ export function makeAuditLogger(ctx: HookContext): HookCallback {
             (input.tool_response as { isError?: boolean } | undefined)?.isError ??
               (input.tool_response as { is_error?: boolean } | undefined)?.is_error,
           ),
-        },
+        }),
       });
     } catch (err) {
       logger.warn({ runId: ctx.runId, err: String(err) }, "audit_log write failed");

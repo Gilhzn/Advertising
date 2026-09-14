@@ -22,11 +22,38 @@ export async function listPosts(businessId: string, filters: PostFilters = {}): 
     .orderBy(desc(posts.scheduledAt));
 }
 
+/**
+ * Unscoped by id. Every caller MUST establish ownership of `post.businessId` before showing the row
+ * to anyone - `assertPostOwnership` in the content actions does exactly that. When the id comes from
+ * data rather than from a route the user owns, use `getPostForBusiness` instead.
+ */
 export async function getPost(id: string): Promise<Post | null> {
   const db = getDb();
   const [row] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
   return row ?? null;
 }
+
+/**
+ * Tenant-scoped lookup for ids that arrive as data rather than as a route parameter.
+ *
+ * The product page resolves `utm_campaign` values coming back from PostHog into posts. Those values
+ * are strings a third party can put into the analytics stream, so an id belonging to another
+ * business would have rendered that business's post title and body on this page. Scoping the query
+ * makes a foreign id simply return nothing. Ids that are not UUIDs are rejected before the query so
+ * a malformed value cannot raise a database error either.
+ */
+export async function getPostForBusiness(businessId: string, id: string): Promise<Post | null> {
+  if (!UUID_RE.test(id)) return null;
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.businessId, businessId)))
+    .limit(1);
+  return row ?? null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function countAwaitingApproval(businessId: string): Promise<number> {
   const db = getDb();

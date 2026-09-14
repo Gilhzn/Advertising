@@ -75,9 +75,19 @@ interface Facet {
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-function serviceOf(account: Pick<ConnectedAccount, "config">): string {
+/**
+ * The PDS origin to talk to, re-validated on every read.
+ *
+ * `normalizeService` used to run only in `connectWithInputs`, while publish and refresh just
+ * stripped a trailing slash off whatever `config.pdsUrl` held. `config` is mutable through
+ * `mergeAccountConfig`, which merges whatever a connector's `refreshForAccount` returns, so any
+ * write to that key outside the wizard would have sent the account's accessJwt to an arbitrary
+ * host. Validating on read makes the connect-time check impossible to bypass.
+ */
+async function serviceOf(account: Pick<ConnectedAccount, "config">): Promise<string> {
   const url = account.config?.pdsUrl;
-  return typeof url === "string" && url ? url.replace(/\/$/, "") : DEFAULT_SERVICE;
+  if (typeof url !== "string" || !url) return DEFAULT_SERVICE;
+  return normalizeService(url);
 }
 
 /** A self-hosted PDS must be a plain public https origin (SSRF guard: no ports, paths, private hosts). */
@@ -364,12 +374,12 @@ export const blueskyConnector: Connector = {
   },
 
   async refreshForAccount(account: ConnectedAccount) {
-    const tokens = await refreshSession(serviceOf(account), requireTokens(account));
+    const tokens = await refreshSession(await serviceOf(account), requireTokens(account));
     return { tokens };
   },
 
   async verify(account: ConnectedAccount) {
-    const service = serviceOf(account);
+    const service = await serviceOf(account);
     const tokens = requireTokens(account);
     try {
       const { data } = await fetchJson<ProfileResponse>(
@@ -394,7 +404,7 @@ export const blueskyConnector: Connector = {
       return { externalId: post.externalId, url: postUrl(handle, post.externalId) };
     }
 
-    const service = serviceOf(account);
+    const service = await serviceOf(account);
     const tokens = requireTokens(account);
     const jwt = tokens.accessToken;
     const did = didOf(account);
@@ -484,7 +494,7 @@ export const blueskyConnector: Connector = {
     since: string,
     posts: Array<{ id: string; externalId: string }>,
   ): Promise<MetricSnapshotInput[]> {
-    const service = serviceOf(account);
+    const service = await serviceOf(account);
     const tokens = requireTokens(account);
     const headers = authHeaders(tokens.accessToken);
     const capturedAt = new Date().toISOString();

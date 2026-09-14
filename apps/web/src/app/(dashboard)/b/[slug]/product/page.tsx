@@ -11,7 +11,7 @@ import { SyncNowButton } from "@/components/product/sync-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getBusinessBySlug } from "@/lib/data/businesses";
-import { getPost } from "@/lib/data/posts";
+import { getPostForBusiness } from "@/lib/data/posts";
 import { getProductAnalyticsSummary } from "@/lib/data/product-analytics";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/utils";
@@ -52,7 +52,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const utmWithPosts = await Promise.all(
     (summary.utmAttribution ?? []).map(async (row) => ({
       row,
-      post: row.utmCampaign ? await getPost(row.utmCampaign).catch(() => null) : null,
+      post: row.utmCampaign ? await getPostForBusiness(business.id, row.utmCampaign) : null,
     })),
   );
 

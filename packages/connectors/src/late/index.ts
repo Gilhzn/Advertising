@@ -11,6 +11,7 @@ import {
   type WizardStep,
 } from "../connector.js";
 import { fetchJson, type HttpOptions } from "../http.js";
+import { safeHttpUrl } from "../net-guard.js";
 import { composeBody } from "../text.js";
 
 /**
@@ -326,7 +327,8 @@ export function createLateConnector(platform: PlatformId): Connector {
       logger.info({ ...context, platform, externalId: id, via: "late" }, "connector.late.published");
       return {
         externalId: id,
-        url: entry?.platformPostUrl,
+        // Late's JSON decides this value and the dashboard renders it as an href.
+        url: safeHttpUrl(entry?.platformPostUrl) ?? undefined,
         raw: { via: "late", latePlatform: lateName, status: entry?.status },
       };
     },

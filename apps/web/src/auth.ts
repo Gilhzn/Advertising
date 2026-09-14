@@ -6,11 +6,32 @@ import { buildAdapter } from "@/lib/auth-adapter";
 import {
   checkLoginAttempt,
   isOwnerLoginEnabled,
-  ownerPasswordCredential,
   recordLoginFailure,
   recordLoginSuccess,
-  verifyPassword,
+  verifyOwnerCredentials,
 } from "@/lib/owner-auth";
+
+/**
+ * Best-effort client address for the login rate limiter, taken from headers the runtime sets.
+ *
+ * `x-forwarded-for` is a client-appendable list, so its LEFTMOST entry is attacker-controlled and
+ * useless as a limiter key. The rightmost entry is the one the nearest proxy appended, and
+ * `x-real-ip` (which Vercel sets) is better still. Neither is a security boundary on its own -
+ * that is what the address-independent global ceiling in `owner-auth` is for.
+ */
+function clientIpFrom(request: unknown): string {
+  const headers = (request as { headers?: Headers } | undefined)?.headers;
+  if (!headers || typeof headers.get !== "function") return "unknown";
+  const realIp = headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const forwarded = headers.get("x-forwarded-for");
+  const hops =
+    forwarded
+      ?.split(",")
+      .map((h) => h.trim())
+      .filter(Boolean) ?? [];
+  return hops[hops.length - 1] ?? "unknown";
+}
 
 const providers = [];
 
@@ -35,23 +56,22 @@ if (isOwnerLoginEnabled()) {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        // Passed by `ownerSignInAction`, which reads `x-forwarded-for` via `next/headers` - not a
-        // credential the user types, just how the client IP reaches the rate limiter.
-        ip: { label: "IP", type: "text" },
       },
-      async authorize(credentials) {
-        const ip = String(credentials?.ip ?? "unknown");
+      async authorize(credentials, request) {
+        // The rate-limiter key comes from the REQUEST, never from the credentials object. It used
+        // to be declared as a credential and read from the POST body, so anyone posting straight to
+        // /api/auth/callback/credentials could send a fresh random `ip` on every attempt and the
+        // limiter counted each one in its own empty bucket - an unlimited password oracle.
+        const ip = clientIpFrom(request);
         if (!checkLoginAttempt(ip).allowed) throw new RateLimitedError();
 
         const email = String(credentials?.email ?? "")
           .trim()
           .toLowerCase();
         const password = String(credentials?.password ?? "");
-        const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
 
         // Never log `password` or the raw credentials object below this line.
-        const matches =
-          email.length > 0 && email === ownerEmail && verifyPassword(password, ownerPasswordCredential());
+        const matches = verifyOwnerCredentials(email, password);
         if (!matches) {
           recordLoginFailure(ip);
           throw new InvalidOwnerCredentialsError();

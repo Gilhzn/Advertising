@@ -1,6 +1,6 @@
 import type { Connector, PublishablePost } from "@adv/connectors";
-import { ConnectorError, resolveConnector } from "@adv/connectors";
-import { type Db, eq, getDb, posts, sql } from "@adv/db";
+import { ConnectorError, resolveConnector, safeHttpUrl } from "@adv/connectors";
+import { and, communities, type Db, eq, getDb, posts, sql } from "@adv/db";
 import { enqueue, JOBS, type JobPayload } from "@adv/jobs";
 import { logger, redactSecrets } from "@adv/shared";
 import type { Job } from "pg-boss";
@@ -197,6 +197,27 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
     /** Where the row goes back to if this attempt does not finish (so the retry can re-claim it). */
     const releaseStatus = post.status === "approved" ? "approved" : "scheduled";
 
+    // `communityRef` is the community's NAME on the platform (a subreddit name, a channel id) -
+    // that is what connectors interpolate, e.g. Reddit's `sr:<name>`. The post row only carries the
+    // community's UUID, and passing that straight through made every community publish target a
+    // non-existent destination.
+    let communityRef: string | null = null;
+    if (post.communityId) {
+      const [community] = await db
+        .select({ name: communities.name })
+        .from(communities)
+        .where(and(eq(communities.id, post.communityId), eq(communities.businessId, post.businessId)))
+        .limit(1);
+      if (!community) {
+        const reason = `community ${post.communityId} not found for this business`;
+        await failPost(db, postId, reason);
+        await writeAudit(post.businessId, "system", "publish_post.failed", { postId, error: reason });
+        log.error({ reason }, "publish_post: community lookup failed");
+        return;
+      }
+      communityRef = community.name;
+    }
+
     const publishablePost: PublishablePost = {
       id: post.id,
       platform: post.platform,
@@ -208,7 +229,7 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       media: post.media as PublishablePost["media"],
       scheduledAt: post.scheduledAt ? post.scheduledAt.toISOString() : null,
       externalId: post.externalId,
-      communityRef: post.communityId,
+      communityRef,
     };
 
     // Set once `connector.publish` resolves. After that point the post EXISTS on the platform, so no
@@ -234,7 +255,9 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
           status: "published",
           publishedAt: new Date(),
           externalId: result.externalId,
-          externalUrl: result.url ?? null,
+          // The connector took this from a third-party API response and the dashboard renders it
+          // as an href, so the scheme is filtered at the storage boundary.
+          externalUrl: safeHttpUrl(result.url),
           compliance,
           lastError: null,
         })

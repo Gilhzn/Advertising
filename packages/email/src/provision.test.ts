@@ -28,6 +28,8 @@ beforeAll(async () => {
       slug: `email-pkg-test-${randomUUID()}`,
       description:
         "A test business created by packages/email's provision.test.ts to exercise provisionMailbox.",
+      // provisionMailbox refuses a domain that is not the one recorded on the business.
+      domain: "example.com",
     })
     .returning({ id: businesses.id });
   if (!business) throw new Error("failed to create test business");
@@ -159,13 +161,14 @@ describe("provisionMailbox (cloudflare_routing)", () => {
   });
 
   it("records last_error and status 'error' when no Cloudflare zone is found for the domain", async () => {
-    const address = `hello-${randomUUID().slice(0, 8)}@no-such-zone.test`;
+    // The business's own domain, so this exercises the zone lookup rather than the ownership gate.
+    const address = `hello-${randomUUID().slice(0, 8)}@example.com`;
     const [localPart] = address.split("@");
     await expect(
       provisionMailbox(
         {
           businessId,
-          domain: "no-such-zone.test",
+          domain: "example.com",
           localPart: localPart ?? "hello",
           forwardTo: "owner@gmail.com",
           provider: "cloudflare_routing",
@@ -266,5 +269,36 @@ describe("verifyMailboxDns", () => {
     ).rejects.toMatchObject({
       code: "not_found",
     });
+  });
+
+  it("refuses a domain that does not belong to the requesting business", async () => {
+    // "a Cloudflare zone exists for it" only proves the OPERATOR controls the domain. Without a
+    // per-business binding, one tenant could provision a mailbox on another tenant's domain (or on
+    // the operator's own apex) and point forwardTo wherever it liked.
+    await expect(
+      provisionMailbox(
+        {
+          businessId,
+          domain: "someone-elses-domain.com",
+          localPart: "hello",
+          provider: "migadu",
+        },
+        { db },
+      ),
+    ).rejects.toThrow(/not the domain recorded for this business/);
+  });
+
+  it("allows a subdomain of the business's own domain", async () => {
+    // mail.example.com is still the business's domain; only a different registrable domain is not.
+    const parsedOk = await provisionMailbox(
+      {
+        businessId,
+        domain: "mail.example.com",
+        localPart: `sub-${randomUUID().slice(0, 8)}`,
+        provider: "migadu",
+      },
+      { db, cloudflare: fakeCloudflare(), migadu: fakeMigadu() },
+    ).catch((err: Error) => err);
+    expect(String(parsedOk)).not.toMatch(/not the domain recorded/);
   });
 });

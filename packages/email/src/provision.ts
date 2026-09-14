@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import * as dnsPromises from "node:dns/promises";
-import { type Db, eq, getDb, mailboxes } from "@adv/db";
+import { businesses, type Db, eq, getDb, mailboxes } from "@adv/db";
 import { logger as defaultLogger, encryptSecret, type Logger } from "@adv/shared";
 import { z } from "zod";
 import { CloudflareClient, type DnsRecordInput } from "./cloudflare.js";
@@ -104,6 +104,30 @@ export async function provisionMailbox(
     }).catch(() => undefined);
     throw new EmailProviderError(message, "provision", "unknown");
   };
+
+  // The only authorisation used to be "a Cloudflare zone exists for this domain", which binds the
+  // domain to the OPERATOR's account and not to the requesting business. Nothing stopped business A
+  // from asking for a mailbox on the operator's own apex, or on another tenant's domain, with
+  // forwardTo pointing anywhere. The domain must be the one recorded on the business.
+  const [owner] = await db
+    .select({ domain: businesses.domain })
+    .from(businesses)
+    .where(eq(businesses.id, parsed.businessId))
+    .limit(1);
+  if (!owner) return fail(`business ${parsed.businessId} not found`);
+  const claimed = (owner.domain ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+|\.+$/g, "");
+  const requested = parsed.domain.trim().toLowerCase();
+  // The business's own domain, or a subdomain of it.
+  const allowed = claimed.length > 0 && (requested === claimed || requested.endsWith(`.${claimed}`));
+  if (!allowed) {
+    return fail(
+      `domain ${parsed.domain} is not the domain recorded for this business` +
+        (claimed ? ` (${claimed})` : " (no domain is set on the business)"),
+    );
+  }
 
   const cloudflare = deps.cloudflare ?? new CloudflareClient();
   const zone = await cloudflare.findZoneForDomain(parsed.domain).catch((err: unknown) => {

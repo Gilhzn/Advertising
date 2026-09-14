@@ -93,13 +93,14 @@ export function snippetFor(kind: SdkKind, token: string, host: string): Snippet 
     capture_pageview: true,
     autocapture: true,
     enable_heatmaps: true,
-    session_recording: { maskAllInputs: false },
+    session_recording: { maskAllInputs: true },
   });
 </script>`,
         notes: [
           "Paste before </head> on every page that should be tracked.",
           "capture_pageview:true means you must NOT also call posthog.capture('$pageview') manually.",
           "enable_heatmaps:true + session_recording turns on both DOM click heatmaps and session replay for this project.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -115,7 +116,7 @@ const options = {
   capture_pageview: true,
   autocapture: true,
   enable_heatmaps: true,
-  session_recording: { maskAllInputs: false },
+  session_recording: { maskAllInputs: true },
 };
 
 root.render(
@@ -126,6 +127,7 @@ root.render(
         notes: [
           "Requires `posthog-js` as a dependency (PostHogProvider re-exports the same client).",
           "capture_pageview:true is fine for a classic multi-page-load React app; for a client-side router see the Next.js snippet's manual-pageview pattern instead.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -141,7 +143,7 @@ posthog.init('${token}', {
   capture_pageview: false, // captured manually below — app router navigations aren't full page loads
   autocapture: true,
   enable_heatmaps: true,
-  session_recording: { maskAllInputs: false },
+  session_recording: { maskAllInputs: true },
 });
 
 // app/PostHogPageView.tsx — mount once inside a client-boundary layout
@@ -163,6 +165,7 @@ export function PostHogPageView() {
         notes: [
           "capture_pageview must be false on init — the App Router doesn't do full page loads, so posthog-js can't see route changes on its own; PostHogPageView captures them manually.",
           "Wrap <PostHogPageView /> in a <Suspense> boundary per Next.js's useSearchParams() rules.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -179,12 +182,13 @@ let POSTHOG_HOST = "${host}"
 let config = PostHogConfig(apiKey: POSTHOG_API_KEY, host: POSTHOG_HOST)
 config.captureScreenViews = true   // autocapture equivalent: screen views, not DOM clicks
 config.sessionReplay = true
-config.sessionReplayConfig.maskAllTextInputs = false
+config.sessionReplayConfig.maskAllTextInputs = true
 
 PostHogSDK.shared.setup(config)`,
         notes: [
           "Add the SDK via Swift Package Manager: https://github.com/PostHog/posthog-ios.",
           "Heatmaps are a web/DOM concept; on iOS the equivalent product signal is session replay + captureScreenViews (screen name autocapture), enabled above.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -208,6 +212,7 @@ PostHogAndroid.setup(this, config)`,
         notes: [
           "Add the `com.posthog:posthog-android` Gradle dependency first.",
           "Heatmaps are web/DOM-only; captureScreenViews + sessionReplay are the mobile equivalent enabled here.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -235,6 +240,7 @@ export function App() {
         notes: [
           "Requires `posthog-react-native` plus its peer deps (`expo-file-system`/`react-native-device-info` etc. per that package's README).",
           "autocapture here covers touches/screen views, not DOM heatmaps (mobile-only equivalent, as with iOS/Android).",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -254,6 +260,7 @@ await Posthog().setup(config);`,
         notes: [
           "Add the `posthog_flutter` pub package first.",
           "Screen autocapture + session replay are this platform's equivalent of web heatmaps.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
@@ -272,6 +279,7 @@ PostHogSDK.Instance.Setup("${token}", options);`,
         notes: [
           "LOWEST-CONFIDENCE SNIPPET — the Unity SDK's exact class/method names were not independently verified this session (see NOTES.md); confirm against posthog.com/docs/libraries/unity before shipping this verbatim.",
           "PostHog Unity SDK primarily targets event capture; heatmaps/session replay are not part of its feature set, so this snippet omits those options.",
+          "Session replay masks every input by default. These snippets go into YOUR app and record YOUR users - unmasking inputs would send their passwords, emails and card numbers to this PostHog project. Unmask individual non-sensitive fields with a `ph-no-capture`-free selector rather than turning masking off wholesale.",
           UTM_NOTE,
         ],
       };
