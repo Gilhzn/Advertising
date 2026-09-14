@@ -145,6 +145,93 @@ export async function assertMonthlyBudget(
   return { spentUsd, capUsd, remainingUsd };
 }
 
+export interface ReserveAgentRunInput {
+  businessId: string | null;
+  jobName: string;
+  agentName: string;
+  model: string;
+  runId?: string;
+  /** Per-job ceiling; the reservation is the smaller of this and what is left of the monthly cap. */
+  maxBudgetUsd?: number;
+}
+
+/**
+ * Creates the `agent_runs` row and reserves its budget in one serialized step.
+ *
+ * The read and the reservation used to be two separate statements, so two jobs entering that window
+ * both observed the same month-to-date spend and each reserved the whole remaining budget - N
+ * concurrent runs could overshoot the cap by roughly N times. Taking `FOR UPDATE` on the business
+ * row first serializes every reservation for that business, so the sum each one reads already
+ * includes the reservations made before it.
+ */
+export async function reserveAgentRun(
+  input: ReserveAgentRunInput,
+  db: Db,
+  now = new Date(),
+): Promise<{ runId: string; maxBudgetUsd: number | undefined }> {
+  if (!input.businessId) {
+    const [run] = await db
+      .insert(agentRuns)
+      .values({
+        ...(input.runId ? { id: input.runId } : {}),
+        businessId: input.businessId,
+        jobName: input.jobName,
+        agent: input.agentName,
+        model: input.model,
+        status: "running",
+        costUsd: (input.maxBudgetUsd ?? 0).toFixed(4),
+        startedAt: now,
+      })
+      .returning({ id: agentRuns.id });
+    if (!run) throw new Error("failed to create agent_runs row");
+    return { runId: run.id, maxBudgetUsd: input.maxBudgetUsd };
+  }
+
+  const businessId = input.businessId;
+  return db.transaction(async (tx) => {
+    const [biz] = await tx
+      .select({ cap: businesses.aiMonthlyBudgetUsd })
+      .from(businesses)
+      .where(eq(businesses.id, businessId))
+      .for("update");
+    if (!biz) throw new Error(`business ${businessId} not found`);
+    const capUsd = Number(biz.cap ?? 0);
+    const [row] = await tx
+      .select({ total: sql<string>`coalesce(sum(${agentRuns.costUsd}), 0)` })
+      .from(agentRuns)
+      .where(and(eq(agentRuns.businessId, businessId), gte(agentRuns.startedAt, startOfMonth(now))));
+    const spentUsd = Number(row?.total ?? 0);
+    if (spentUsd >= capUsd) {
+      throw new BudgetExceededError(
+        `monthly AI budget exhausted for business ${businessId}: $${spentUsd.toFixed(4)} of $${capUsd.toFixed(2)}`,
+        businessId,
+        spentUsd,
+        capUsd,
+      );
+    }
+    const remainingUsd = Math.max(0, capUsd - spentUsd);
+    const reserved =
+      input.maxBudgetUsd === undefined ? remainingUsd : Math.min(input.maxBudgetUsd, remainingUsd);
+    const [run] = await tx
+      .insert(agentRuns)
+      .values({
+        ...(input.runId ? { id: input.runId } : {}),
+        businessId,
+        jobName: input.jobName,
+        agent: input.agentName,
+        model: input.model,
+        status: "running",
+        // provisional reservation, visible to the next reservation's sum; replaced by the real cost
+        // when the run finishes (success or failure)
+        costUsd: reserved.toFixed(4),
+        startedAt: now,
+      })
+      .returning({ id: agentRuns.id });
+    if (!run) throw new Error("failed to create agent_runs row");
+    return { runId: run.id, maxBudgetUsd: reserved };
+  });
+}
+
 function usageFromResult(msg: SDKResultMessage): AgentRunUsage {
   const models = Object.values(msg.modelUsage ?? {});
   if (models.length > 0) {
@@ -192,30 +279,20 @@ export async function runAgentJob(input: RunAgentJobInput): Promise<AgentRunSumm
   const model = input.model ?? MODEL_POLICY.supervisor.model;
   const log = logger.child({ businessId: input.businessId ?? undefined, jobId: input.jobName });
 
-  let maxBudgetUsd = input.maxBudgetUsd;
-  if (input.businessId) {
-    const budget = await assertMonthlyBudget(input.businessId, db, now());
-    maxBudgetUsd =
-      maxBudgetUsd === undefined ? budget.remainingUsd : Math.min(maxBudgetUsd, budget.remainingUsd);
-  }
-
-  const [run] = await db
-    .insert(agentRuns)
-    .values({
-      ...(input.runId ? { id: input.runId } : {}),
+  const reservation = await reserveAgentRun(
+    {
       businessId: input.businessId,
       jobName: input.jobName,
-      agent: input.agentName,
+      agentName: input.agentName,
       model,
-      status: "running",
-      // provisional reservation so concurrent runs cannot all see the full remaining monthly budget;
-      // replaced by the real cost when the run finishes (success or failure)
-      costUsd: (maxBudgetUsd ?? 0).toFixed(4),
-      startedAt: now(),
-    })
-    .returning({ id: agentRuns.id });
-  if (!run) throw new Error("failed to create agent_runs row");
-  const runId = run.id;
+      runId: input.runId,
+      maxBudgetUsd: input.maxBudgetUsd,
+    },
+    db,
+    now(),
+  );
+  const maxBudgetUsd = reservation.maxBudgetUsd;
+  const runId = reservation.runId;
 
   const decisionLog: DecisionLogEntry[] = [];
   const pushDecision = (entry: DecisionLogEntry) => {

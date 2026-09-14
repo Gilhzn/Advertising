@@ -19,6 +19,8 @@ export const JOBS = {
     postId: z.string().uuid(),
     /** set by publish_due_posts, which already flipped the row to `publishing` (its atomic claim) */
     claimedBy: z.enum(["scheduler"]).optional(),
+    /** Single-use proof of the scheduler's claim; consumed by publish_post so retries re-claim. */
+    claimToken: z.string().uuid().optional(),
   }),
   publish_due_posts: z.object({}),
   fetch_insights: z.object({ businessId: z.string().uuid().optional() }),

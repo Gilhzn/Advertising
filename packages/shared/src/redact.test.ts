@@ -159,9 +159,7 @@ describe("redactSecrets - credentials that carry no key name", () => {
   });
 
   it("redacts an AWS access key id", () => {
-    expect(redactSecrets("using AKIAIOSFODNN7EXAMPLE for uploads")).not.toContain(
-      "AKIAIOSFODNN7EXAMPLE",
-    );
+    expect(redactSecrets("using AKIAIOSFODNN7EXAMPLE for uploads")).not.toContain("AKIAIOSFODNN7EXAMPLE");
     expect(redactSecrets("ASIAY34FZKBOKMUTVV7A")).toBe("[REDACTED]");
   });
 

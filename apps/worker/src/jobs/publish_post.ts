@@ -127,6 +127,22 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       }
     }
 
+    // Compliance was enforced by prompt only: nothing in code required check_compliance to have run
+    // before a post could be scheduled or published, so an agent that skipped the step still
+    // produced an approved post. A missing verdict is only acceptable when a human explicitly took
+    // responsibility for this post (approve / publish-now both record approved_by).
+    const verdict = (post.compliance as { verdict?: string } | null)?.verdict;
+    if (verdict === "block" || (verdict !== "pass" && verdict !== "fix" && !post.approvedBy)) {
+      const reason =
+        verdict === "block"
+          ? "compliance guard blocked this post"
+          : "post has no compliance verdict and no recorded human approval";
+      await failPost(db, postId, reason);
+      await writeAudit(post.businessId, "system", "publish_post.refused", { postId, reason });
+      log.warn({ reason }, "publish_post: refused");
+      return;
+    }
+
     const limiter = await getRateLimiter();
     const waitMs = limiter.acquire(account.id, connector.rateLimit);
     if (waitMs > 0) {
@@ -140,9 +156,27 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
     }
 
     // Atomic claim. `publish_due_posts` already performed it (the row is `publishing` and the payload
-    // says so); every other path claims here. A `publishing` row without that marker may only be taken
-    // once its lease has gone stale, which is what lets a crashed worker's post recover.
-    const preClaimedByScheduler = payload.claimedBy === "scheduler" && post.status === "publishing";
+    // carries the claim token it minted); every other path claims here. A `publishing` row without a
+    // matching token may only be taken once its lease has gone stale, which is what lets a crashed
+    // worker's post recover.
+    //
+    // The token is CONSUMED by the same statement that verifies it, which is the whole point: the old
+    // marker was `payload.claimedBy === "scheduler" && post.status === "publishing"`, and both halves
+    // stay true on every pg-boss retry of that same job. A worker killed after the platform accepted
+    // the post but before the DB write would retry, skip the claim and the stale-lease check, and
+    // publish a second time - with the externalId idempotency guard unable to help, because the write
+    // that would have set it never landed.
+    let preClaimedByScheduler = false;
+    if (payload.claimedBy === "scheduler" && payload.claimToken && post.status === "publishing") {
+      const consumed = resultRows<{ id: string }>(
+        await db.execute(sql`
+          UPDATE posts SET claim_token = NULL, updated_at = now()
+          WHERE id = ${postId} AND claim_token = ${payload.claimToken}
+          RETURNING id
+        `),
+      );
+      preClaimedByScheduler = consumed.length > 0;
+    }
     if (!preClaimedByScheduler) {
       const claimed = resultRows<{ id: string }>(
         await db.execute(sql`
@@ -177,8 +211,14 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       communityRef: post.communityId,
     };
 
+    // Set once `connector.publish` resolves. After that point the post EXISTS on the platform, so no
+    // failure path may mark it `failed`: doing so shows a human a failure they will retry, and the
+    // retry publishes it twice. A DB error after this point is a bookkeeping problem, not a
+    // publishing one, and is recorded as such.
+    let acceptedByPlatform = false;
     try {
       const result = await connector.publish(account, publishablePost);
+      acceptedByPlatform = true;
       const baseCompliance = (post.compliance ?? {}) as Record<string, unknown>;
       const compliance =
         result.visibility === "private"
@@ -206,6 +246,27 @@ export async function handlePublishPost(jobs: Job<JobPayload<"publish_post">>[])
       });
       log.info({ externalId: result.externalId }, "publish_post: published");
     } catch (err) {
+      if (acceptedByPlatform) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.error({ err }, "publish_post: platform accepted the post but recording it failed");
+        try {
+          await db
+            .update(posts)
+            .set({
+              status: "published",
+              publishedAt: new Date(),
+              lastError: redactSecrets(`published, but recording the result failed: ${message}`),
+            })
+            .where(eq(posts.id, postId));
+        } catch (writeErr) {
+          log.error({ err: writeErr }, "publish_post: could not record the published state either");
+        }
+        await writeAudit(post.businessId, "system", "publish_post.recording_failed", {
+          postId,
+          error: message,
+        });
+        return;
+      }
       if (err instanceof ConnectorError && err.retryable) {
         // Release the claim so pg-boss's retry can take it again without waiting out the lease.
         await db

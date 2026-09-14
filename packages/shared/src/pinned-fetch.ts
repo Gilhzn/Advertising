@@ -31,5 +31,8 @@ export function createPinnedDispatcher(pinned: PinnedAddress): UndiciAgent {
 export function pinnedFetch(pinned: PinnedAddress): typeof fetch {
   const dispatcher = createPinnedDispatcher(pinned);
   return ((input: string | URL | Request, init?: RequestInit) =>
-    undiciFetch(input as string, { ...(init as object), dispatcher } as never) as unknown as Promise<Response>) as typeof fetch;
+    undiciFetch(
+      input as string,
+      { ...(init as object), dispatcher } as never,
+    ) as unknown as Promise<Response>) as typeof fetch;
 }

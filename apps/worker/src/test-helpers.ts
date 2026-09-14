@@ -94,6 +94,10 @@ export async function createTestPost(
       platform: TEST_PLATFORM,
       body: "Test post body from apps/worker's vitest suite.",
       status: "draft",
+      // publish_post refuses a post that has neither a compliance verdict nor a recorded human
+      // approval, so the default fixture stands in for "check_compliance already ran and passed".
+      // Tests that exercise that gate override this to null.
+      compliance: { verdict: "pass", issues: [], notes: "test fixture" },
       ...overrides,
     })
     .returning();

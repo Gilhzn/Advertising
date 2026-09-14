@@ -735,6 +735,15 @@ export async function schedulingDecision(
     .limit(1);
   if (!post) return { ok: false, reason: "post not found for this business" };
   if (post.status === "rejected") return { ok: false, reason: "post was rejected by the compliance guard" };
+  // The compliance check used to be enforced by the prompt only: `compliance` was selected here and
+  // never read, and the only compliance-derived gate was `status === "rejected"`, which
+  // check_compliance sets itself. So create_post_draft -> schedule_post, never calling
+  // check_compliance, produced an `approved` post. A model that skips the step - or is talked into
+  // skipping it - must not be able to schedule, so the verdict is now a hard precondition.
+  const verdict = (post.compliance as { verdict?: string } | null)?.verdict;
+  if (verdict !== "pass" && verdict !== "fix") {
+    return { ok: false, reason: "run check_compliance on this post before scheduling it" };
+  }
   if (post.status === "published" || post.status === "publishing") {
     return { ok: false, reason: `post is already ${post.status}` };
   }

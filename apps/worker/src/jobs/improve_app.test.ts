@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   assertPushableBranch,
   branchNameFor,
-  buildCloneUrl,
   buildPrBody,
+  buildRemoteUrl,
+  credentialArgs,
   hasChanges,
   parseRepoUrl,
   shortRecommendationId,
@@ -47,11 +48,29 @@ describe("improve_app pure helpers", () => {
     });
   });
 
-  describe("buildCloneUrl", () => {
-    it("embeds the token as x-access-token basic auth", () => {
-      expect(buildCloneUrl("https://github.com/acme/widget-app", "ghp_secret123")).toBe(
-        "https://x-access-token:ghp_secret123@github.com/acme/widget-app.git",
+  describe("buildRemoteUrl", () => {
+    // The token must never reach the remote URL: `git clone` writes that URL into .git/config, in
+    // the same directory the coding agent has Read and Bash access to.
+    it("produces a remote with no credentials in it", () => {
+      expect(buildRemoteUrl("https://github.com/acme/widget-app")).toBe(
+        "https://github.com/acme/widget-app.git",
       );
+    });
+
+    it.each(["ghp_secret123", "x-access-token"])("never contains %s", (needle) => {
+      expect(buildRemoteUrl("https://github.com/acme/widget-app")).not.toContain(needle);
+    });
+  });
+
+  describe("credentialArgs", () => {
+    it("passes the token as a per-invocation header, not repository config", () => {
+      const args = credentialArgs("ghp_secret123");
+      expect(args[0]).toBe("-c");
+      expect(args[1]).toMatch(/^http\.extraHeader=Authorization: Basic /);
+      const encoded = (args[1] as string).split("Basic ")[1] as string;
+      expect(Buffer.from(encoded, "base64").toString()).toBe("x-access-token:ghp_secret123");
+      // `-c` config is process-scoped; nothing here writes to .git/config.
+      expect(args).not.toContain("--global");
     });
   });
 

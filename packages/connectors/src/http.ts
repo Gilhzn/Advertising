@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { logger, type PlatformId } from "@adv/shared";
 import { ConnectorError } from "./connector.js";
-import { assertPublicUrl, assertPublicUrlWithAddresses, pinnedFetchFor } from "./net-guard.js";
+import { assertPublicUrlWithAddresses, pinnedFetchFor } from "./net-guard.js";
 
 /** Hard ceiling for anything we download and re-upload to a platform. */
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;

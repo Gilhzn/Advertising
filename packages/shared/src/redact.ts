@@ -97,8 +97,7 @@ const PREFIXED_TOKEN_RE = /\b(?:xox[abprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-
 const AWS_KEY_ID_RE = /\b(?:AKIA|ASIA|AIDA|AROA|AGPA|ANPA|ANVA|APKA|ABIA|ACCA)[A-Z0-9]{16}\b/g;
 
 /** PEM private key blocks - redact the whole block, header to footer, in one go. */
-const PEM_BLOCK_RE =
-  /-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )*PRIVATE KEY-----/g;
+const PEM_BLOCK_RE = /-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )*PRIVATE KEY-----/g;
 
 /** A PEM header with no matching footer (a truncated error body): redact to end of input. */
 const PEM_TRUNCATED_RE = /-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*/g;

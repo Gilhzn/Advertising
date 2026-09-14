@@ -228,6 +228,15 @@ export const posts = pgTable(
     compliance: jsonb("compliance"),
     attempts: integer("attempts").notNull().default(0),
     lastError: text("last_error"),
+    /**
+     * Single-use token proving that `publish_due_posts` claimed this exact row for this exact job.
+     * The scheduler mints one per claim and puts it in the job payload; `publish_post` consumes it
+     * (nulls it out) in the same statement that verifies it. Without it the "already claimed by the
+     * scheduler" shortcut stayed true on every pg-boss retry of the same job, so a worker killed
+     * after the platform accepted the post would skip both the claim and the stale-lease check and
+     * publish it a second time.
+     */
+    claimToken: uuid("claim_token"),
     generatedByRunId: uuid("generated_by_run_id"),
     ...timestamps,
   },
