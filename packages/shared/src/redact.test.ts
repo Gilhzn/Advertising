@@ -92,3 +92,40 @@ describe("redactDeep", () => {
     expect(redactDeep({ a: 1, b: true, c: null })).toEqual({ a: 1, b: true, c: null });
   });
 });
+
+describe("redactSecrets - credentials that carry no key name", () => {
+  it("removes the password from a Postgres connection string", () => {
+    const out = redactSecrets("error: connect to postgres://adv:Sup3rSecret@db.internal:5432/adv failed");
+    expect(out).not.toContain("Sup3rSecret");
+    expect(out).toContain("postgres://adv:[REDACTED]@");
+    expect(out).toContain("db.internal");
+  });
+
+  it("removes the password from redis and amqp URLs, including a blank username", () => {
+    expect(redactSecrets("redis://:h0tp4ss@cache:6379")).not.toContain("h0tp4ss");
+    expect(redactSecrets("amqp://guest:guest@rabbit:5672")).not.toContain("guest:guest@");
+  });
+
+  it("removes a token embedded in an https clone URL", () => {
+    const out = redactSecrets(
+      "fatal: could not read https://x-access-token:ghp_AbCd1234567890abcdefghij@github.com/o/r.git",
+    );
+    expect(out).not.toContain("ghp_AbCd1234567890abcdefghij");
+    expect(out).toContain("github.com");
+  });
+
+  it("leaves a URL without credentials untouched", () => {
+    const url = "https://api.example.com/v1/posts?limit=10";
+    expect(redactSecrets(url)).toBe(url);
+  });
+
+  it("removes a JWT", () => {
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r";
+    expect(redactSecrets(`Authorization failed for ${jwt}`)).not.toContain("eyJzdWIiOiIxMjM0NTY3ODkw");
+  });
+
+  it("does not mangle ordinary prose or a UUID", () => {
+    const text = "post 3f7c1b2a-9d4e-4c5a-8b1f-2e6d7a8c9b0d failed after 3 attempts";
+    expect(redactSecrets(text)).toBe(text);
+  });
+});

@@ -34,8 +34,12 @@ const KEYS_RE = SECRET_KEYS.join("|");
 /** `"access_token": "..."` (JSON) — quoted key, quoted value. */
 const JSON_VALUE_RE = new RegExp(`("(?:${KEYS_RE})"\\s*:\\s*)"[^"]*"`, "gi");
 
-/** `access_token=...` (query string / form body / `key: value` log lines). */
-const QUERY_VALUE_RE = new RegExp(`\\b(${KEYS_RE})(\\s*[=:]\\s*)([^&\\s,"'\`)\\]}]+)`, "gi");
+/**
+ * `access_token=...` (query string / form body / `key: value` log lines).
+ * The value stops at `@` and `/` so a `user:token@host/path` URL keeps its host and path - otherwise
+ * the whole remainder of the URL is swallowed into the redaction.
+ */
+const QUERY_VALUE_RE = new RegExp(`\\b(${KEYS_RE})(\\s*[=:]\\s*)([^&\\s,"'\`)\\]}@/]+)`, "gi");
 
 /** `Authorization: Bearer <token>` / `Basic <base64>`. */
 const AUTH_SCHEME_RE = /\b(bearer|basic)\s+[A-Za-z0-9\-._~+/]{8,}={0,2}/gi;
@@ -47,6 +51,16 @@ const TELEGRAM_BARE_RE = /\b\d{6,}:[A-Za-z0-9_-]{20,}\b/g;
 /** Discord webhook URLs: keep the id, drop the token. */
 const DISCORD_WEBHOOK_RE =
   /(https?:\/\/(?:[\w-]+\.)?discord(?:app)?\.com\/api(?:\/v\d+)?\/webhooks\/\d+\/)[\w-]+/gi;
+
+/**
+ * Credentials in URL userinfo: `postgres://user:password@host`, `redis://:pass@host`,
+ * `https://user:token@host`. Connection strings reach error messages far more often than headers do
+ * (`DATABASE_URL` in a driver error), and no key-name rule catches them - the password has no key.
+ */
+const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]*):[^\s@/]+@/gi;
+
+/** JSON Web Tokens - three base64url segments. The payload alone can carry identifying claims. */
+const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
 
 /** Slack-style `xoxb-`/`xoxp-` and GitHub `ghp_`/`gho_` prefixed tokens. */
 const PREFIXED_TOKEN_RE = /\b(?:xox[abprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g;
@@ -78,9 +92,12 @@ export function redactSecrets(input: unknown): string {
       .replace(JSON_VALUE_RE, `$1"${REDACTED}"`)
       // Before the key=value rule, so `Authorization: Bearer <token>` keeps its scheme word.
       .replace(AUTH_SCHEME_RE, (m) => `${m.slice(0, m.indexOf(" "))} ${REDACTED}`)
+      // Also before it, so `https://x-access-token:<secret>@host` is handled as userinfo.
+      .replace(URL_USERINFO_RE, `$1:${REDACTED}@`)
       .replace(QUERY_VALUE_RE, (m, key: string, sep: string, value: string) =>
         /^(bearer|basic|\[REDACTED\])$/i.test(value) ? m : `${key}${sep}${REDACTED}`,
       )
+      .replace(JWT_RE, REDACTED)
       .replace(DISCORD_WEBHOOK_RE, `$1${REDACTED}`)
       .replace(TELEGRAM_BOT_RE, `bot${REDACTED}`)
       .replace(TELEGRAM_BARE_RE, REDACTED)
