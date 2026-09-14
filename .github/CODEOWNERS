@@ -1,0 +1,27 @@
+# Paths that can execute code on a maintainer's machine or in CI, or that gate publishing.
+# A pull request touching any of these needs the repository owner's review before it can merge.
+#
+# Enforce this by turning on "Require review from Code Owners" in
+# Settings -> Branches -> branch protection rule for the default branch.
+
+# Claude Code hooks and agent definitions run locally when the repo is opened.
+/.claude/                 @Gilhzn
+/scripts/                 @Gilhzn
+
+# Workflows run in CI with repository secrets.
+/.github/                 @Gilhzn
+
+# Dependency changes pull in third-party code.
+/package.json             @Gilhzn
+/pnpm-lock.yaml           @Gilhzn
+/pnpm-workspace.yaml      @Gilhzn
+
+# The rules that decide what may be published, and the code that enforces them.
+/packages/knowledge/rules/ @Gilhzn
+/packages/agents/src/hooks.ts       @Gilhzn
+/packages/agents/src/tools/         @Gilhzn
+/packages/shared/src/crypto.ts      @Gilhzn
+/packages/shared/src/redact.ts      @Gilhzn
+/apps/web/src/auth.ts               @Gilhzn
+/apps/web/src/lib/owner-auth.ts     @Gilhzn
+/apps/web/src/app/api/               @Gilhzn
