@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import type { PlatformId } from "@adv/shared";
+import { BLOCKED_HOST_SUFFIXES, blockedIpReason, type PlatformId } from "@adv/shared";
+import { type PinnedAddress, pinnedFetch } from "@adv/shared/pinned-fetch";
 import { ConnectorError } from "./connector.js";
 
 /**
@@ -10,58 +11,17 @@ import { ConnectorError } from "./connector.js";
  * cloud-metadata address. Callers must also fetch with `redirect: "manual"` and re-check hops.
  */
 
-const BLOCKED_HOST_SUFFIXES = [".local", ".internal", ".localhost", ".home.arpa", ".lan"];
+/**
+ * The IP-range classifier used to live here as a second, hand-rolled implementation. It classified
+ * IPv6 by string prefix and only matched IPv4-mapped addresses spelled with a dotted quad, so
+ * `https://[::ffff:a9fe:a9fe]/` - the cloud metadata endpoint written in hex - passed the guard.
+ * There is now one shared implementation in `@adv/shared` that both SSRF guards call.
+ */
+export { blockedIpReason } from "@adv/shared";
 
-function ipv4ToInt(ip: string): number {
-  return ip.split(".").reduce((acc, oct) => (acc << 8) + Number(oct), 0) >>> 0;
-}
-
-function inCidr4(ip: string, cidr: string): boolean {
-  const [base, bitsStr] = cidr.split("/") as [string, string];
-  const bits = Number(bitsStr);
-  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
-  return (ipv4ToInt(ip) & mask) === (ipv4ToInt(base) & mask);
-}
-
-const BLOCKED_V4 = [
-  "0.0.0.0/8",
-  "10.0.0.0/8",
-  "100.64.0.0/10",
-  "127.0.0.0/8",
-  "169.254.0.0/16",
-  "172.16.0.0/12",
-  "192.0.0.0/24",
-  "192.0.2.0/24",
-  "192.168.0.0/16",
-  "198.18.0.0/15",
-  "198.51.100.0/24",
-  "203.0.113.0/24",
-  "224.0.0.0/3",
-];
-
+/** Kept as a named export because callers and tests import it from here. */
 export function isBlockedIp(ip: string): boolean {
-  const family = isIP(ip);
-  if (family === 4) return BLOCKED_V4.some((c) => inCidr4(ip, c));
-  if (family === 6) {
-    const lower = ip.toLowerCase();
-    if (lower === "::" || lower === "::1") return true;
-    // IPv4-mapped / IPv4-compatible
-    const mapped = lower.match(/^(?:::ffff:|::)(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isBlockedIp(mapped[1] as string);
-    if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA fc00::/7
-    if (
-      lower.startsWith("fe8") ||
-      lower.startsWith("fe9") ||
-      lower.startsWith("fea") ||
-      lower.startsWith("feb")
-    )
-      return true; // link-local
-    if (lower.startsWith("ff")) return true; // multicast
-    if (lower.startsWith("2002:")) return true; // 6to4 (embeds v4)
-    if (lower.startsWith("64:ff9b:")) return true; // NAT64
-    return false;
-  }
-  return true; // not an IP at all
+  return blockedIpReason(ip) !== null;
 }
 
 export interface PublicUrlOptions {
@@ -72,8 +32,18 @@ export interface PublicUrlOptions {
   resolve?: (host: string) => Promise<Array<{ address: string; family: number }>>;
 }
 
-/** Validates the URL and resolves the host; throws ConnectorError("rejected") on anything non-public. */
-export async function assertPublicUrl(raw: string, opts: PublicUrlOptions): Promise<URL> {
+/**
+ * Validates the URL and resolves the host, returning the addresses it validated so the caller can
+ * pin the connection to them. Throws ConnectorError("rejected") on anything non-public.
+ *
+ * Returning the addresses matters: validating a name and then calling bare `fetch()` re-resolves it,
+ * which a DNS-rebinding host defeats. `pinnedFetchFor` below turns this result into a fetch that
+ * can only reach the address that was actually checked.
+ */
+export async function assertPublicUrlWithAddresses(
+  raw: string,
+  opts: PublicUrlOptions,
+): Promise<{ url: URL; addresses: PinnedAddress[] }> {
   let url: URL;
   try {
     url = new URL(raw);
@@ -92,12 +62,14 @@ export async function assertPublicUrl(raw: string, opts: PublicUrlOptions): Prom
   if (isIP(host)) {
     if (isBlockedIp(host))
       throw new ConnectorError("URL host is not public", opts.platform, "rejected", false);
-    return url;
+    return { url, addresses: [{ address: host, family: isIP(host) as 4 | 6 }] };
   }
-  // Unit tests use msw with fictional hostnames that never resolve. Only when no resolver is injected
-  // and we are under Vitest, skip the DNS step (literal IPs and blocked suffixes are still enforced).
-  if (!opts.resolve && process.env.NODE_ENV === "test" && process.env.ADV_NET_GUARD !== "strict") {
-    return url;
+  // Unit tests drive msw with fictional hostnames that never resolve, so the DNS step has to be
+  // skippable. That skip is opt-IN and fails closed: it needs this one explicit variable, which only
+  // the test setup sets. Keying it off NODE_ENV instead would silently disable the guard on any host
+  // that happens to run with NODE_ENV=test. Literal IPs and blocked suffixes are enforced either way.
+  if (!opts.resolve && process.env.ADV_NET_GUARD_ALLOW_UNRESOLVABLE === "1") {
+    return { url, addresses: [] };
   }
   const resolve = opts.resolve ?? ((h: string) => lookup(h, { all: true }));
   let answers: Array<{ address: string; family: number }>;
@@ -109,5 +81,22 @@ export async function assertPublicUrl(raw: string, opts: PublicUrlOptions): Prom
   if (answers.length === 0 || answers.some((a) => isBlockedIp(a.address))) {
     throw new ConnectorError("URL host is not public", opts.platform, "rejected", false);
   }
-  return url;
+  const first = answers[0] as { address: string; family: number };
+  return { url, addresses: [{ address: first.address, family: first.family === 6 ? 6 : 4 }] };
+}
+
+/** Back-compat wrapper for the many call sites that only need the validated URL. */
+export async function assertPublicUrl(raw: string, opts: PublicUrlOptions): Promise<URL> {
+  return (await assertPublicUrlWithAddresses(raw, opts)).url;
+}
+
+/**
+ * A `fetch` bound to the addresses `assertPublicUrlWithAddresses` validated, so the request cannot
+ * be re-pointed at a private address between the check and the connection. Falls back to global
+ * `fetch` only when there is nothing to pin (the test-only unresolvable path), which is the same
+ * risk posture that path already carries.
+ */
+export function pinnedFetchFor(addresses: PinnedAddress[]): typeof fetch {
+  const first = addresses[0];
+  return first ? pinnedFetch(first) : fetch;
 }

@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { logger, type PlatformId } from "@adv/shared";
 import { ConnectorError } from "./connector.js";
-import { assertPublicUrl } from "./net-guard.js";
+import { assertPublicUrl, assertPublicUrlWithAddresses, pinnedFetchFor } from "./net-guard.js";
 
 /** Hard ceiling for anything we download and re-upload to a platform. */
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -426,11 +426,17 @@ export async function downloadMedia(
   try {
     let res: Response;
     try {
-      // SSRF guard: only public https hosts, redirects re-validated hop by hop (max 3)
-      let current = (await assertPublicUrl(url, { platform })).toString();
+      // SSRF guard: only public https hosts, redirects re-validated hop by hop (max 3). Each hop
+      // fetches through a dispatcher pinned to the address that hop validated, so a rebinding host
+      // cannot swap in a private address between the DNS check and the connection.
+      let checked = await assertPublicUrlWithAddresses(url, { platform });
+      let current = checked.url.toString();
       let hops = 0;
       while (true) {
-        res = await fetch(current, { signal: controller.signal, redirect: "manual" });
+        res = await pinnedFetchFor(checked.addresses)(current, {
+          signal: controller.signal,
+          redirect: "manual",
+        });
         if (res.status >= 300 && res.status < 400) {
           const loc = res.headers.get("location");
           if (!loc || ++hops > 3) {
@@ -441,7 +447,10 @@ export async function downloadMedia(
               false,
             );
           }
-          current = (await assertPublicUrl(new URL(loc, current).toString(), { platform })).toString();
+          checked = await assertPublicUrlWithAddresses(new URL(loc, current).toString(), {
+            platform,
+          });
+          current = checked.url.toString();
           continue;
         }
         break;

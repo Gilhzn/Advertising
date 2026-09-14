@@ -128,4 +128,85 @@ describe("redactSecrets - credentials that carry no key name", () => {
     const text = "post 3f7c1b2a-9d4e-4c5a-8b1f-2e6d7a8c9b0d failed after 3 attempts";
     expect(redactSecrets(text)).toBe(text);
   });
+
+  // Regression corpus for the prefixed-key bypass: `\b` cannot match between a word character and
+  // `_`, so every real-world credential key name (which is almost always prefixed) was unredacted.
+  // Each string below was verified to leak in full before the key anchor was changed.
+  it.each([
+    ["app_password=abcd-efgh-ijkl-mnop", "abcd-efgh-ijkl-mnop"],
+    ["user_access_token=hunter2", "hunter2"],
+    ["X_CLIENT_SECRET=shortsecretvalue", "shortsecretvalue"],
+    ["MIGADU_API_KEY=hunter2hunter2", "hunter2hunter2"],
+    ["OWNER_PASSWORD=Tr0ub4dor3", "Tr0ub4dor3"],
+    ["bot_token: 12345:short", "12345:short"],
+    ["imap_passwd = letmein", "letmein"],
+    ['{"app_password": "s3cret"}', "s3cret"],
+    ['{"MIGADU_API_KEY":"abc123"}', "abc123"],
+    ["cookie: session=abc123def456", "abc123def456"],
+    ["db_connection_string=postgres-plain-value", "postgres-plain-value"],
+  ])("redacts the prefixed credential key in %s", (input, secret) => {
+    expect(redactSecrets(input)).not.toContain(secret);
+  });
+
+  it("redacts a password containing a slash inside a connection string", () => {
+    const out = redactSecrets("postgres://adv:pa/ss+word@db.internal:5432/adv");
+    expect(out).not.toContain("pa/ss+word");
+    expect(out).toContain("db.internal:5432/adv");
+  });
+
+  it("redacts the whole key=value even when the value contains a slash", () => {
+    expect(redactSecrets("api_key=abc/def")).toBe("api_key=[REDACTED]");
+  });
+
+  it("redacts an AWS access key id", () => {
+    expect(redactSecrets("using AKIAIOSFODNN7EXAMPLE for uploads")).not.toContain(
+      "AKIAIOSFODNN7EXAMPLE",
+    );
+    expect(redactSecrets("ASIAY34FZKBOKMUTVV7A")).toBe("[REDACTED]");
+  });
+
+  it("redacts a whole PEM private key block, header and footer included", () => {
+    const pem = [
+      "-----BEGIN RSA PRIVATE KEY-----",
+      "MIIEowIBAAKCAQEA1234567890abcdefghijklmnop",
+      "-----END RSA PRIVATE KEY-----",
+    ].join("\n");
+    expect(redactSecrets(`key load failed:\n${pem}`)).toBe("key load failed:\n[REDACTED]");
+  });
+
+  it("redacts a truncated PEM block that has no footer", () => {
+    const out = redactSecrets("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqh...");
+    expect(out).not.toContain("MIIEvQIBADANBgkqh");
+  });
+
+  it("redacts an all-uppercase base32 secret that mixed-case entropy rules miss", () => {
+    expect(redactSecrets("JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXPJBSW")).toBe("[REDACTED]");
+  });
+
+  // False-positive guards: over-redaction destroys the diagnostic value of an error message, so
+  // these have to survive the widened key rule.
+  it.each([
+    "the tokenizer returned 42 tokens",
+    "token_count: 5",
+    "password_policy_version: 3",
+    "Contact sales@example.com about pricing",
+    "https://api.example.com/v1/users?fields=id,name",
+    "businessId=3f2b1a44-0000-4000-8000-000000000001 slug=my-cool-shop",
+    "SCHEDULED_AT_UTC_FIELD_IS_REQUIRED_HERE",
+  ])("leaves %s untouched", (text) => {
+    expect(redactSecrets(text)).toBe(text);
+  });
+
+  it("blanks a prefixed secret key in a deep payload", () => {
+    const out = redactDeep({
+      meta: { appPassword: "abcd-efgh", migaduApiKey: "k1", userAccessToken: "t1" },
+      note: "ok",
+    });
+    expect(out.meta).toEqual({
+      appPassword: "[REDACTED]",
+      migaduApiKey: "[REDACTED]",
+      userAccessToken: "[REDACTED]",
+    });
+    expect(out.note).toBe("ok");
+  });
 });

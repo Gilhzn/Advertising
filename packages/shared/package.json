@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./pinned-fetch": {
+      "types": "./dist/pinned-fetch.d.ts",
+      "default": "./dist/pinned-fetch.js"
     }
   },
   "scripts": {
@@ -18,7 +22,8 @@
   },
   "dependencies": {
     "pino": "^9.7.0",
-    "zod": "^4.1.0"
+    "zod": "^4.1.0",
+    "undici": "^7.29.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

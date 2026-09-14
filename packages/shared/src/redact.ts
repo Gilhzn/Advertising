@@ -14,32 +14,54 @@
 
 export const REDACTED = "[REDACTED]";
 
-/** Key names whose value is always a credential, in JSON bodies or query strings. */
+/**
+ * Key names whose value is always a credential, in JSON bodies or query strings.
+ * Sorted longest-first so the alternation prefers the most specific name.
+ */
 const SECRET_KEYS = [
-  "access_token",
+  "connection_string",
   "refresh_token",
-  "id_token",
   "client_secret",
+  "access_token",
+  "authorization",
+  "private_key",
+  "privatekey",
+  "credentials",
+  "credential",
+  "passphrase",
+  "signature",
+  "id_token",
+  "password",
   "api_key",
   "apikey",
-  "token",
-  "secret",
-  "password",
   "passwd",
-  "authorization",
+  "secret",
+  "cookie",
+  "token",
 ] as const;
 
 const KEYS_RE = SECRET_KEYS.join("|");
 
-/** `"access_token": "..."` (JSON) — quoted key, quoted value. */
-const JSON_VALUE_RE = new RegExp(`("(?:${KEYS_RE})"\\s*:\\s*)"[^"]*"`, "gi");
+/**
+ * Credential key names are almost never bare. They arrive prefixed (`app_password`,
+ * `user_access_token`, `MIGADU_API_KEY`, `X_CLIENT_SECRET`) and `\b` cannot match between a word
+ * character and `_`, so an anchor of `\b` left every prefixed form unredacted. A negative lookbehind
+ * over the same character class anchors at the true start of the identifier instead, and the greedy
+ * prefix then absorbs `app_`, `user_`, `MIGADU_` and so on.
+ */
+const KEY_CHAR = "A-Za-z0-9_.\\-";
+const KEY_RE = `(?<![${KEY_CHAR}])[${KEY_CHAR}]*(?:${KEYS_RE})`;
+
+/** `"access_token": "..."` / `"app_password": "..."` (JSON) - quoted key, quoted value. */
+const JSON_VALUE_RE = new RegExp(`("${KEY_RE}"\\s*:\\s*)"[^"]*"`, "gi");
 
 /**
- * `access_token=...` (query string / form body / `key: value` log lines).
- * The value stops at `@` and `/` so a `user:token@host/path` URL keeps its host and path - otherwise
- * the whole remainder of the URL is swallowed into the redaction.
+ * `access_token=...` (query string / form body / `key: value` log lines / `KEY=value` env dumps).
+ * The value runs to the next delimiter. `@` and `/` are deliberately *inside* the value now: URL
+ * userinfo is handled by its own rule further up the chain, so excluding them here only ever cut a
+ * redaction short (`api_key=abc/def` left `/def` in the clear).
  */
-const QUERY_VALUE_RE = new RegExp(`\\b(${KEYS_RE})(\\s*[=:]\\s*)([^&\\s,"'\`)\\]}@/]+)`, "gi");
+const QUERY_VALUE_RE = new RegExp(`(${KEY_RE})(\\s*[=:]\\s*)([^&\\s,;"'\`)\\]}]+)`, "gi");
 
 /** `Authorization: Bearer <token>` / `Basic <base64>`. */
 const AUTH_SCHEME_RE = /\b(bearer|basic)\s+[A-Za-z0-9\-._~+/]{8,}={0,2}/gi;
@@ -56,8 +78,9 @@ const DISCORD_WEBHOOK_RE =
  * Credentials in URL userinfo: `postgres://user:password@host`, `redis://:pass@host`,
  * `https://user:token@host`. Connection strings reach error messages far more often than headers do
  * (`DATABASE_URL` in a driver error), and no key-name rule catches them - the password has no key.
+ * The password half may legitimately contain `/` and `+` (base64 passwords), so it runs to the `@`.
  */
-const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]*):[^\s@/]+@/gi;
+const URL_USERINFO_RE = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]*):[^\s@]+@/gi;
 
 /** JSON Web Tokens - three base64url segments. The payload alone can carry identifying claims. */
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
@@ -65,11 +88,33 @@ const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
 /** Slack-style `xoxb-`/`xoxp-` and GitHub `ghp_`/`gho_` prefixed tokens. */
 const PREFIXED_TOKEN_RE = /\b(?:xox[abprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g;
 
+/**
+ * AWS access key ids. They are fixed-shape, all-uppercase and 20 chars, so none of the entropy
+ * rules below fire on them: `LONG_HEX_RE` needs hex, `LONG_B64URL_RE` needs 32+ chars and mixed
+ * case. A leaked key id plus a leaked secret is a full credential pair, and the id is the half that
+ * shows up in error messages.
+ */
+const AWS_KEY_ID_RE = /\b(?:AKIA|ASIA|AIDA|AROA|AGPA|ANPA|ANVA|APKA|ABIA|ACCA)[A-Z0-9]{16}\b/g;
+
+/** PEM private key blocks - redact the whole block, header to footer, in one go. */
+const PEM_BLOCK_RE =
+  /-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )*PRIVATE KEY-----/g;
+
+/** A PEM header with no matching footer (a truncated error body): redact to end of input. */
+const PEM_TRUNCATED_RE = /-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*/g;
+
 /** Pure hex blobs of 32+ chars (AES keys, sha256 digests, many API keys). */
 const LONG_HEX_RE = /\b[0-9a-fA-F]{32,}\b/g;
 
 /** base64url-ish blobs of 32+ chars, only when they actually look random (see `looksRandom`). */
 const LONG_B64URL_RE = /\b[A-Za-z0-9_-]{32,}={0,2}/g;
+
+/**
+ * All-uppercase alphanumeric blobs of 32+ chars containing at least one digit (base32 secrets, TOTP
+ * seeds, some vendor keys). `looksRandom` requires mixed case, so these slipped through unredacted.
+ * Requiring a digit keeps SCREAMING_SNAKE constants and long uppercase prose out of scope.
+ */
+const LONG_UPPER_RE = /\b(?=[A-Z0-9]*\d)[A-Z0-9]{32,}\b/g;
 
 /**
  * True for a base64url candidate that looks like an opaque credential rather than a long
@@ -89,6 +134,10 @@ export function redactSecrets(input: unknown): string {
   const text = typeof input === "string" ? input : String(input);
   return (
     text
+      // Before everything else: a PEM body is base64 that the entropy rules would shred into a
+      // half-redacted mess, and the header/footer alone would survive.
+      .replace(PEM_BLOCK_RE, REDACTED)
+      .replace(PEM_TRUNCATED_RE, REDACTED)
       .replace(JSON_VALUE_RE, `$1"${REDACTED}"`)
       // Before the key=value rule, so `Authorization: Bearer <token>` keeps its scheme word.
       .replace(AUTH_SCHEME_RE, (m) => `${m.slice(0, m.indexOf(" "))} ${REDACTED}`)
@@ -102,7 +151,9 @@ export function redactSecrets(input: unknown): string {
       .replace(TELEGRAM_BOT_RE, `bot${REDACTED}`)
       .replace(TELEGRAM_BARE_RE, REDACTED)
       .replace(PREFIXED_TOKEN_RE, REDACTED)
+      .replace(AWS_KEY_ID_RE, REDACTED)
       .replace(LONG_HEX_RE, REDACTED)
+      .replace(LONG_UPPER_RE, REDACTED)
       .replace(LONG_B64URL_RE, (m) => (looksRandom(m) ? REDACTED : m))
   );
 }
@@ -125,7 +176,12 @@ function isSecretKey(key: string): boolean {
     k.endsWith("token") ||
     k.endsWith("secret") ||
     k.endsWith("password") ||
-    k.endsWith("apikey")
+    k.endsWith("passwd") ||
+    k.endsWith("apikey") ||
+    k.endsWith("credential") ||
+    k.endsWith("credentials") ||
+    k.endsWith("passphrase") ||
+    k.endsWith("privatekey")
   );
 }
 
